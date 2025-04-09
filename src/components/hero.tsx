@@ -51,7 +51,31 @@ const Hero = ({ onContactClick = () => {} }: HeroProps) => {
                   {phrases[currentPhraseIndex]}
                 </motion.span>
               </AnimatePresence>
-              <span className="relative inline-block w-2 h-2 bg-[#ff3131] rounded-full ml-1" />
+              <div className="relative inline-block ml-1 h-4 w-4">
+                <motion.div
+                  className="absolute h-4 w-4 bg-white border-2 border-[#ff3131] rounded-full"
+                  initial={{ y: 0, x: "50%" }}
+                  animate={{
+                    y: ["0%", "100%", "0%"],
+                    x: "50%",
+                  }}
+                  transition={{
+                    duration: 1,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
+                />
+                <motion.div
+                  className="absolute h-2 w-2 bg-[#ff3131] rounded-full top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
+                  initial={{ scale: 1 }}
+                  animate={{ scale: [1, 0.8, 1] }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
+                />
+              </div>
             </h1>
           </div>
 
@@ -67,11 +91,11 @@ const Hero = ({ onContactClick = () => {} }: HeroProps) => {
           <div className="pt-4">
             <Button
               onClick={onContactClick}
-              className="bg-black hover:bg-gray-800 text-white rounded-md px-8 py-6 text-lg flex items-center gap-2 group"
+              className="bg-black hover:bg-gray-800 text-white rounded-md px-6 py-3 text-base flex items-center gap-2 group"
             >
               <span>Let's talk</span>
-              <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center group-hover:bg-gray-100 transition-colors">
-                <Phone className="h-5 w-5 text-black" />
+              <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center group-hover:bg-gray-100 transition-colors">
+                <Phone className="h-4 w-4 text-black" />
               </div>
             </Button>
           </div>

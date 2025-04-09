@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "./ui/button";
+import { Phone } from "lucide-react";
 import Logo from "./ui/logo";
 
 interface HeaderProps {
@@ -52,7 +53,7 @@ const Header = ({ onContactClick = () => {} }: HeaderProps) => {
         </nav>
         <Button
           onClick={onContactClick}
-          className="bg-red-500 hover:bg-red-600 text-white rounded-md"
+          className="bg-red-500 hover:bg-red-600 text-white rounded-md px-6 py-2 text-base"
         >
           Let's talk
         </Button>
