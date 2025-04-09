@@ -12,7 +12,7 @@ export function Logo({ ...props }: LogoProps) {
   const handleError = () => {
     console.error(
       "Failed to load logo. Please check if file exists at:",
-      window.location.origin + logoUrl,
+      window.location.origin + logoUrl
     );
     setImageError(true);
   };
