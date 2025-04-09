@@ -42,6 +42,7 @@ export function Logo({ ...props }: LogoProps) {
           scale: 1.05,
           transition: { duration: 0.2 },
         }}
+        className="flex items-center"
       >
         <img
           src={logoUrl}
@@ -49,9 +50,11 @@ export function Logo({ ...props }: LogoProps) {
           onError={handleError}
           onLoad={handleLoad}
           style={{
-            height: "128px", // 200% increase from 64px (h-16)
+            height: "32px", // Changed from 128px to 32px to match design
             width: "auto",
             opacity: isLoaded ? 1 : 0,
+            margin: 0, // Added to remove extra space
+            padding: 0 // Added to remove extra space
           }}
           {...props}
         />
