@@ -50,6 +50,12 @@ const Header = ({ onContactClick = () => {} }: HeaderProps) => {
           >
             Team
           </a>
+          <a
+            href="/blog"
+            className="text-gray-800 hover:text-gray-600 transition-colors"
+          >
+            Blog
+          </a>
         </nav>
         <Button
           onClick={onContactClick}
