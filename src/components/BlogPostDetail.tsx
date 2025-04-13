@@ -11,7 +11,6 @@ import { BlogPost } from "../types/blog";
 // Import React Markdown and plugins
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
-import rehypeSanitize from 'rehype-sanitize';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
 // Import markdown styles
@@ -154,7 +153,7 @@ const BlogPostDetail = (props: BlogPostDetailProps) => {
                 <ReactMarkdown
                   className="markdown-body" // Use your markdown-body class
                   remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeHighlight]}
+                  rehypePlugins={[rehypeRaw, rehypeHighlight]}
                 >
                   {post.content}
                 </ReactMarkdown>
