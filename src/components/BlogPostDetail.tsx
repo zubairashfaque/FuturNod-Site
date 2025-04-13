@@ -14,8 +14,10 @@ import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
-// You may need to import a CSS file for the code highlighting
-// import 'highlight.js/styles/github.css';
+// Import markdown styles
+import '../styles/markdown.css';
+// Import syntax highlighting styles
+import 'highlight.js/styles/github.css';
 
 interface BlogPostDetailProps {
   slug?: string;
@@ -150,7 +152,7 @@ const BlogPostDetail = (props: BlogPostDetailProps) => {
                 <div dangerouslySetInnerHTML={{ __html: post.content }} />
               ) : (
                 <ReactMarkdown
-                  className="markdown-content"
+                  className="markdown-body" // Use your markdown-body class
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeHighlight]}
                 >
