@@ -1,6 +1,5 @@
 import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Button } from "./ui/button";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 
 const BlogHeader = () => {
@@ -12,12 +11,6 @@ const BlogHeader = () => {
     <div className="container mx-auto px-4 py-8 border-b mb-8">
       <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
         <h1 className="text-3xl font-bold">Futurnod Blog</h1>
-        <Button
-          onClick={() => navigate("/blog/create")}
-          className="bg-primary hover:bg-primary/90"
-        >
-          Create New Post
-        </Button>
       </div>
 
       <Tabs defaultValue={currentPath} className="w-full">

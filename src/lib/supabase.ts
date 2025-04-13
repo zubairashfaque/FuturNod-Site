@@ -13,7 +13,7 @@ const usingPlaceholders =
 
 if (usingPlaceholders) {
   console.warn(
-    "Supabase credentials missing. Using localStorage fallback. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables for database functionality.",
+    "Supabase credentials missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables for database functionality.",
   );
 }
 

@@ -1,6 +1,8 @@
 // src/components/CreateBlog.tsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "./auth/AuthContext";
+import EnvVariablesNotice from "./EnvVariablesNotice";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import { Button } from "./ui/button";
@@ -31,6 +33,14 @@ import ContactModal from "./ContactModal";
 
 const CreateBlog = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!user) {
+      navigate("/admin/login");
+    }
+  }, [user, navigate]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +53,8 @@ const CreateBlog = () => {
     content: "",
     categoryId: "",
     tagIds: [],
-    featuredImage: "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=800&q=80",
+    featuredImage:
+      "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=800&q=80",
     status: "draft",
     publishedAt: null,
   });
@@ -60,16 +71,19 @@ const CreateBlog = () => {
           getCategories(),
           getTags(),
         ]);
-        
+
         console.log("Categories:", fetchedCategories);
         console.log("Tags:", fetchedTags);
-        
+
         setCategories(fetchedCategories);
         setTags(fetchedTags);
 
         // Set default category if available
         if (fetchedCategories.length > 0 && !formData.categoryId) {
-          setFormData(prev => ({ ...prev, categoryId: fetchedCategories[0].id }));
+          setFormData((prev) => ({
+            ...prev,
+            categoryId: fetchedCategories[0].id,
+          }));
         }
       } catch (error) {
         console.error("Error fetching categories and tags:", error);
@@ -128,7 +142,7 @@ const CreateBlog = () => {
       }
 
       console.log("Submitting form data:", formData);
-      
+
       const newPost = await createBlogPost(formData);
       console.log("Created post:", newPost);
 
@@ -137,7 +151,7 @@ const CreateBlog = () => {
     } catch (error) {
       console.error("Error creating blog post:", error);
       setError(
-        error instanceof Error ? error.message : "Failed to create blog post"
+        error instanceof Error ? error.message : "Failed to create blog post",
       );
     } finally {
       setIsSubmitting(false);
@@ -161,6 +175,7 @@ const CreateBlog = () => {
       <Header onContactClick={handleContactClick} />
 
       <div className="container mx-auto px-4 py-16 max-w-4xl">
+        <EnvVariablesNotice />
         <Card className="bg-white shadow-md">
           <CardHeader>
             <CardTitle className="text-2xl font-bold">
@@ -265,7 +280,8 @@ const CreateBlog = () => {
                                 // Use a smaller version
                                 const img = new Image();
                                 img.onload = function () {
-                                  const canvas = document.createElement("canvas");
+                                  const canvas =
+                                    document.createElement("canvas");
                                   const ctx = canvas.getContext("2d");
                                   // Resize to smaller dimensions
                                   const maxWidth = 800;
@@ -366,7 +382,9 @@ const CreateBlog = () => {
                 <Label>Tags</Label>
                 <div className="flex flex-wrap gap-2 p-2 border rounded-md min-h-[60px]">
                   {tags.length === 0 ? (
-                    <p className="text-sm text-gray-500 p-2">No tags available</p>
+                    <p className="text-sm text-gray-500 p-2">
+                      No tags available
+                    </p>
                   ) : (
                     tags.map((tag) => (
                       <Badge

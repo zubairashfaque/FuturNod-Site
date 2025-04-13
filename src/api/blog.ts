@@ -1,20 +1,56 @@
 // src/api/blog.ts
-import { createClient } from '@supabase/supabase-js';
-import { BlogPostFormData, BlogPost, Category, Tag } from "../types/blog";
+import {
+  BlogPostFormData,
+  BlogPost,
+  Category,
+  Tag,
+  Author,
+} from "../types/blog";
+import {
+  supabase,
+  isSupabaseConfigured,
+  useLocalStorageFallback,
+} from "../lib/supabase";
+import { generateSlug, calculateReadTime } from "../lib/utils";
 
-// Initialize Supabase client
-// Replace these with your actual Supabase URL and anon key
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
+// Mock data for local storage fallback
+const mockAuthor: Author = {
+  id: "1",
+  name: "Demo Author",
+  avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=demo",
+  bio: "This is a demo author for local development.",
+};
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const mockCategories: Category[] = [
+  { id: "1", name: "Technology", slug: "technology" },
+  { id: "2", name: "Design", slug: "design" },
+  { id: "3", name: "Business", slug: "business" },
+];
 
-// Generate a slug from title
-const generateSlug = (title: string) => {
-  return title
-    .toLowerCase()
-    .replace(/[^\w\s]/gi, '')
-    .replace(/\s+/g, '-');
+const mockTags: Tag[] = [
+  { id: "1", name: "React", slug: "react" },
+  { id: "2", name: "UI/UX", slug: "ui-ux" },
+  { id: "3", name: "Development", slug: "development" },
+  { id: "4", name: "Web", slug: "web" },
+  { id: "5", name: "Mobile", slug: "mobile" },
+];
+
+// Local storage keys
+const STORAGE_KEYS = {
+  POSTS: "blog_posts",
+  CATEGORIES: "blog_categories",
+  TAGS: "blog_tags",
+};
+
+// Helper function to get mock data or data from local storage
+const getLocalData = <T>(key: string, mockData: T): T => {
+  const storedData = localStorage.getItem(key);
+  return storedData ? JSON.parse(storedData) : mockData;
+};
+
+// Helper function to save data to local storage
+const saveLocalData = <T>(key: string, data: T): void => {
+  localStorage.setItem(key, JSON.stringify(data));
 };
 
 // Get all blog posts with filtering options
@@ -22,69 +58,91 @@ export const getBlogPosts = async (options?: {
   status?: string;
   search?: string;
   categoryId?: string;
+  page?: number;
+  limit?: number;
 }): Promise<BlogPost[]> => {
+  if (!isSupabaseConfigured()) {
+    if (useLocalStorageFallback()) {
+      console.log("Using local storage fallback for getBlogPosts");
+      let posts = getLocalData<BlogPost[]>(STORAGE_KEYS.POSTS, []);
+
+      // Apply filters
+      if (options?.status) {
+        posts = posts.filter((post) => post.status === options.status);
+      }
+
+      if (options?.search) {
+        const searchLower = options.search.toLowerCase();
+        posts = posts.filter(
+          (post) =>
+            post.title.toLowerCase().includes(searchLower) ||
+            post.excerpt.toLowerCase().includes(searchLower) ||
+            post.content.toLowerCase().includes(searchLower),
+        );
+      }
+
+      if (options?.categoryId) {
+        posts = posts.filter((post) => post.category.id === options.categoryId);
+      }
+
+      // Apply pagination
+      const page = options?.page || 1;
+      const limit = options?.limit || 10;
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+
+      return posts.slice(startIndex, endIndex);
+    }
+
+    throw new Error(
+      "Supabase is not configured. Please set up your Supabase credentials.",
+    );
+  }
+
   try {
-    // Start building the query
-    let query = supabase.from('blog_posts').select(`
-      *,
-      author:author_id(*),
-      category:category_id(*)
-    `);
-    
+    let query = supabase.from("blog_posts").select(`
+        *,
+        category:categories(*),
+        tags:blog_post_tags(tag:tags(*)),
+        author:authors(*)
+      `);
+
     // Apply filters
     if (options?.status) {
-      query = query.eq('status', options.status);
+      query = query.eq("status", options.status);
     }
-    
-    if (options?.categoryId) {
-      query = query.eq('category_id', options.categoryId);
-    }
-    
+
     if (options?.search) {
-      query = query.or(`title.ilike.%${options.search}%,excerpt.ilike.%${options.search}%`);
+      query = query.or(
+        `title.ilike.%${options.search}%,excerpt.ilike.%${options.search}%,content.ilike.%${options.search}%`,
+      );
     }
-    
-    // Execute query
+
+    if (options?.categoryId) {
+      query = query.eq("category_id", options.categoryId);
+    }
+
+    // Apply pagination
+    const page = options?.page || 1;
+    const limit = options?.limit || 10;
+    const startIndex = (page - 1) * limit;
+
+    query = query.range(startIndex, startIndex + limit - 1);
+    query = query.order("created_at", { ascending: false });
+
     const { data, error } = await query;
-    
-    if (error) {
-      throw error;
-    }
-    
-    // Get tags for each post
-    const postsWithTags = await Promise.all(
-      data.map(async (post) => {
-        const { data: tagData, error: tagError } = await supabase
-          .from('blog_post_tags')
-          .select(`
-            tag:tag_id(*)
-          `)
-          .eq('post_id', post.id);
-        
-        if (tagError) {
-          console.error('Error fetching tags for post', post.id, tagError);
-          return {
-            ...post,
-            tags: [],
-          };
-        }
-        
-        return {
-          ...post,
-          tags: tagData.map(t => t.tag),
-        };
-      })
-    );
-    
-    // Format to match the BlogPost interface
-    return postsWithTags.map(post => ({
+
+    if (error) throw error;
+
+    // Transform the data to match the BlogPost interface
+    return (data || []).map((post) => ({
       id: post.id,
       title: post.title,
       slug: post.slug,
       excerpt: post.excerpt,
       content: post.content,
       category: post.category,
-      tags: post.tags || [],
+      tags: post.tags.map((tagRel: any) => tagRel.tag),
       author: post.author,
       createdAt: post.created_at,
       updatedAt: post.updated_at,
@@ -94,45 +152,43 @@ export const getBlogPosts = async (options?: {
       readTime: post.read_time,
     }));
   } catch (error) {
-    console.error("Error getting blog posts:", error);
-    throw new Error("Failed to get blog posts");
+    console.error("Error fetching blog posts:", error);
+    throw new Error(`Failed to fetch blog posts: ${(error as Error).message}`);
   }
 };
 
 // Get a blog post by ID
 export const getBlogPostById = async (id: string): Promise<BlogPost | null> => {
+  if (!isSupabaseConfigured()) {
+    if (useLocalStorageFallback()) {
+      console.log("Using local storage fallback for getBlogPostById");
+      const posts = getLocalData<BlogPost[]>(STORAGE_KEYS.POSTS, []);
+      return posts.find((post) => post.id === id) || null;
+    }
+
+    throw new Error(
+      "Supabase is not configured. Please set up your Supabase credentials.",
+    );
+  }
+
   try {
     const { data, error } = await supabase
-      .from('blog_posts')
-      .select(`
+      .from("blog_posts")
+      .select(
+        `
         *,
-        author:author_id(*),
-        category:category_id(*)
-      `)
-      .eq('id', id)
+        category:categories(*),
+        tags:blog_post_tags(tag:tags(*)),
+        author:authors(*)
+      `,
+      )
+      .eq("id", id)
       .single();
-    
-    if (error) {
-      throw error;
-    }
-    
-    if (!data) {
-      return null;
-    }
-    
-    // Get tags for the post
-    const { data: tagData, error: tagError } = await supabase
-      .from('blog_post_tags')
-      .select(`
-        tag:tag_id(*)
-      `)
-      .eq('post_id', id);
-    
-    if (tagError) {
-      console.error('Error fetching tags for post', id, tagError);
-      throw tagError;
-    }
-    
+
+    if (error) throw error;
+    if (!data) return null;
+
+    // Transform the data to match the BlogPost interface
     return {
       id: data.id,
       title: data.title,
@@ -140,7 +196,7 @@ export const getBlogPostById = async (id: string): Promise<BlogPost | null> => {
       excerpt: data.excerpt,
       content: data.content,
       category: data.category,
-      tags: tagData.map(t => t.tag),
+      tags: data.tags.map((tagRel: any) => tagRel.tag),
       author: data.author,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
@@ -150,45 +206,45 @@ export const getBlogPostById = async (id: string): Promise<BlogPost | null> => {
       readTime: data.read_time,
     };
   } catch (error) {
-    console.error("Error getting blog post by ID:", error);
-    throw new Error("Failed to get blog post");
+    console.error("Error fetching blog post by ID:", error);
+    throw new Error(`Failed to fetch blog post: ${(error as Error).message}`);
   }
 };
 
 // Get a blog post by slug
-export const getBlogPostBySlug = async (slug: string): Promise<BlogPost | null> => {
+export const getBlogPostBySlug = async (
+  slug: string,
+): Promise<BlogPost | null> => {
+  if (!isSupabaseConfigured()) {
+    if (useLocalStorageFallback()) {
+      console.log("Using local storage fallback for getBlogPostBySlug");
+      const posts = getLocalData<BlogPost[]>(STORAGE_KEYS.POSTS, []);
+      return posts.find((post) => post.slug === slug) || null;
+    }
+
+    throw new Error(
+      "Supabase is not configured. Please set up your Supabase credentials.",
+    );
+  }
+
   try {
     const { data, error } = await supabase
-      .from('blog_posts')
-      .select(`
+      .from("blog_posts")
+      .select(
+        `
         *,
-        author:author_id(*),
-        category:category_id(*)
-      `)
-      .eq('slug', slug)
+        category:categories(*),
+        tags:blog_post_tags(tag:tags(*)),
+        author:authors(*)
+      `,
+      )
+      .eq("slug", slug)
       .single();
-    
-    if (error) {
-      throw error;
-    }
-    
-    if (!data) {
-      return null;
-    }
-    
-    // Get tags for the post
-    const { data: tagData, error: tagError } = await supabase
-      .from('blog_post_tags')
-      .select(`
-        tag:tag_id(*)
-      `)
-      .eq('post_id', data.id);
-    
-    if (tagError) {
-      console.error('Error fetching tags for post', data.id, tagError);
-      throw tagError;
-    }
-    
+
+    if (error) throw error;
+    if (!data) return null;
+
+    // Transform the data to match the BlogPost interface
     return {
       id: data.id,
       title: data.title,
@@ -196,7 +252,7 @@ export const getBlogPostBySlug = async (slug: string): Promise<BlogPost | null> 
       excerpt: data.excerpt,
       content: data.content,
       category: data.category,
-      tags: tagData.map(t => t.tag),
+      tags: data.tags.map((tagRel: any) => tagRel.tag),
       author: data.author,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
@@ -206,230 +262,105 @@ export const getBlogPostBySlug = async (slug: string): Promise<BlogPost | null> 
       readTime: data.read_time,
     };
   } catch (error) {
-    console.error("Error getting blog post by slug:", error);
-    throw new Error("Failed to get blog post");
+    console.error("Error fetching blog post by slug:", error);
+    throw new Error(`Failed to fetch blog post: ${(error as Error).message}`);
   }
 };
 
 // Create a new blog post
-export const createBlogPost = async (formData: BlogPostFormData): Promise<BlogPost> => {
-  try {
-    // Start a transaction
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    
-    if (userError) {
-      throw new Error("User not authenticated");
-    }
-    
-    const userId = userData.user.id;
-    
-    // Generate a slug from the title
-    const slug = generateSlug(formData.title);
-    
-    // Create the blog post
-    const now = new Date().toISOString();
-    const { data: post, error: postError } = await supabase
-      .from('blog_posts')
-      .insert({
-        title: formData.title,
-        slug: slug,
-        excerpt: formData.excerpt,
-        content: formData.content,
-        author_id: userId,
-        category_id: formData.categoryId,
-        featured_image: formData.featuredImage,
-        status: formData.status,
-        published_at: formData.status === 'published' ? now : null,
-        created_at: now,
-        updated_at: now,
-        read_time: Math.max(1, Math.ceil(formData.content.length / 2000)), // Rough estimate
-      })
-      .select()
-      .single();
-    
-    if (postError) {
-      console.error("Error creating blog post:", postError);
-      throw new Error(postError.message);
-    }
-    
-    // Add tags to the post if there are any
-    if (formData.tagIds && formData.tagIds.length > 0) {
-      const tagInserts = formData.tagIds.map(tagId => ({
-        post_id: post.id,
-        tag_id: tagId,
-      }));
-      
-      const { error: tagError } = await supabase
-        .from('blog_post_tags')
-        .insert(tagInserts);
-      
-      if (tagError) {
-        console.error("Error adding tags to post:", tagError);
-        // Continue anyway but log the error
-      }
-    }
-    
-    // Fetch the complete post with relations
-    return await getBlogPostById(post.id) as BlogPost;
-  } catch (error) {
-    console.error("Error creating blog post:", error);
-    throw error instanceof Error 
-      ? error 
-      : new Error("Failed to create blog post");
+export const createBlogPost = async (
+  formData: BlogPostFormData,
+): Promise<BlogPost> => {
+  if (!isSupabaseConfigured()) {
+    throw new Error(
+      "Supabase is not configured. Please set up your Supabase credentials.",
+    );
   }
+
+  // Placeholder for the rebuilt function
+  console.log("createBlogPost called with formData:", formData);
+  throw new Error("Blog creation functionality is being rebuilt.");
 };
 
 // Update an existing blog post
-export const updateBlogPost = async (id: string, formData: BlogPostFormData): Promise<BlogPost> => {
-  try {
-    // Get the current post
-    const { data: currentPost, error: getError } = await supabase
-      .from('blog_posts')
-      .select('*')
-      .eq('id', id)
-      .single();
-    
-    if (getError) {
-      throw new Error("Blog post not found");
-    }
-    
-    // Generate a new slug if the title has changed
-    const slug = currentPost.title !== formData.title
-      ? generateSlug(formData.title)
-      : currentPost.slug;
-    
-    // Update the post
-    const now = new Date().toISOString();
-    const { error: updateError } = await supabase
-      .from('blog_posts')
-      .update({
-        title: formData.title,
-        slug: slug,
-        excerpt: formData.excerpt,
-        content: formData.content,
-        category_id: formData.categoryId,
-        featured_image: formData.featuredImage,
-        status: formData.status,
-        published_at: formData.status === 'published' 
-          ? (currentPost.published_at || now) 
-          : currentPost.published_at,
-        updated_at: now,
-        read_time: Math.max(1, Math.ceil(formData.content.length / 2000)),
-      })
-      .eq('id', id);
-    
-    if (updateError) {
-      throw new Error(updateError.message);
-    }
-    
-    // Remove all current tags
-    const { error: deleteTagsError } = await supabase
-      .from('blog_post_tags')
-      .delete()
-      .eq('post_id', id);
-    
-    if (deleteTagsError) {
-      console.error("Error removing tags from post:", deleteTagsError);
-      // Continue anyway but log the error
-    }
-    
-    // Add new tags
-    if (formData.tagIds && formData.tagIds.length > 0) {
-      const tagInserts = formData.tagIds.map(tagId => ({
-        post_id: id,
-        tag_id: tagId,
-      }));
-      
-      const { error: tagError } = await supabase
-        .from('blog_post_tags')
-        .insert(tagInserts);
-      
-      if (tagError) {
-        console.error("Error adding tags to post:", tagError);
-        // Continue anyway but log the error
-      }
-    }
-    
-    // Fetch the complete updated post with relations
-    return await getBlogPostById(id) as BlogPost;
-  } catch (error) {
-    console.error("Error updating blog post:", error);
-    throw error instanceof Error 
-      ? error 
-      : new Error("Failed to update blog post");
+export const updateBlogPost = async (
+  id: string,
+  formData: BlogPostFormData,
+): Promise<BlogPost> => {
+  if (!isSupabaseConfigured()) {
+    throw new Error(
+      "Supabase is not configured. Please set up your Supabase credentials.",
+    );
   }
+
+  // Placeholder for the rebuilt function
+  console.log("updateBlogPost called with id:", id, "and formData:", formData);
+  throw new Error("Blog update functionality is being rebuilt.");
 };
 
 // Delete a blog post
 export const deleteBlogPost = async (id: string): Promise<void> => {
-  try {
-    // Delete the tags first (due to foreign key constraints)
-    const { error: deleteTagsError } = await supabase
-      .from('blog_post_tags')
-      .delete()
-      .eq('post_id', id);
-    
-    if (deleteTagsError) {
-      throw new Error(deleteTagsError.message);
-    }
-    
-    // Delete the post
-    const { error: deletePostError } = await supabase
-      .from('blog_posts')
-      .delete()
-      .eq('id', id);
-    
-    if (deletePostError) {
-      throw new Error(deletePostError.message);
-    }
-  } catch (error) {
-    console.error("Error deleting blog post:", error);
-    throw error instanceof Error 
-      ? error 
-      : new Error("Failed to delete blog post");
+  if (!isSupabaseConfigured()) {
+    throw new Error(
+      "Supabase is not configured. Please set up your Supabase credentials.",
+    );
   }
+
+  // Placeholder for the rebuilt function
+  console.log("deleteBlogPost called with id:", id);
+  throw new Error("Blog deletion functionality is being rebuilt.");
 };
 
 // Get all categories
 export const getCategories = async (): Promise<Category[]> => {
+  if (!isSupabaseConfigured()) {
+    if (useLocalStorageFallback()) {
+      console.log("Using local storage fallback for getCategories");
+      return getLocalData<Category[]>(STORAGE_KEYS.CATEGORIES, mockCategories);
+    }
+    console.warn(
+      "Supabase is not configured. Attempting to fetch categories anyway.",
+    );
+  }
+
   try {
     const { data, error } = await supabase
-      .from('categories')
-      .select('*');
-    
-    if (error) {
-      throw error;
-    }
-    
-    return data.map(category => ({
-      id: category.id,
-      name: category.name,
-      slug: category.slug,
-    }));
+      .from("categories")
+      .select("*")
+      .order("name");
+
+    if (error) throw error;
+
+    return data || [];
   } catch (error) {
-    console.error("Error getting categories:", error);
-    throw new Error("Failed to get categories");
+    console.error("Error fetching categories:", error);
+    return mockCategories; // Fallback to mock data on error
   }
 };
 
 // Get all tags
 export const getTags = async (): Promise<Tag[]> => {
+  if (!isSupabaseConfigured()) {
+    if (useLocalStorageFallback()) {
+      console.log("Using local storage fallback for getTags");
+      return getLocalData<Tag[]>(STORAGE_KEYS.TAGS, mockTags);
+    }
+    console.warn(
+      "Supabase is not configured. Attempting to fetch tags anyway.",
+    );
+  }
+
   try {
     const { data, error } = await supabase
-      .from('tags')
-      .select('*');
-    
-    if (error) {
-      throw error;
-    }
-    
-    return data.map(tag => ({
-      id: tag.id,
-      name: tag.name,
-      slug: tag.slug,
-    }));
+      .from("tags")
+      .select("*")
+      .order("name");
+
+    if (error) throw error;
+
+    return data || [];
   } catch (error) {
-    console.error("Error getting tags:", error);
-    throw new Error("Failed to get tags");
+    console.error("Error fetching tags:", error);
+    return mockTags; // Fallback to mock data on error
   }
 };

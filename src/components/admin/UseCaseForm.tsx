@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import EnvVariablesNotice from "../EnvVariablesNotice";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
@@ -178,6 +179,7 @@ const UseCaseForm = () => {
 
   return (
     <div className="max-w-4xl mx-auto p-6">
+      <EnvVariablesNotice />
       <h1 className="text-2xl font-bold mb-6">
         {isEditMode ? "Edit Use Case" : "Create New Use Case"}
       </h1>

@@ -1,7 +1,25 @@
 import { handleContactFormSubmission, ContactFormValues } from "./contact";
+import { Category, Tag } from "../types/blog";
 
 // This file simulates a backend server for local development
 // In a real application, these would be actual API endpoints
+
+// Mock categories
+export const mockCategories: Category[] = [
+  { id: "1", name: "Technology", slug: "technology" },
+  { id: "2", name: "Business", slug: "business" },
+  { id: "3", name: "Design", slug: "design" },
+  { id: "4", name: "Marketing", slug: "marketing" },
+];
+
+// Mock tags
+export const mockTags: Tag[] = [
+  { id: "1", name: "React", slug: "react" },
+  { id: "2", name: "JavaScript", slug: "javascript" },
+  { id: "3", name: "UI/UX", slug: "ui-ux" },
+  { id: "4", name: "Web Development", slug: "web-development" },
+  { id: "5", name: "Mobile", slug: "mobile" },
+];
 
 // Setup mock API handlers
 export const setupMockServer = () => {

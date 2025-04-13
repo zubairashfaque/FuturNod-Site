@@ -1,6 +1,6 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useState, useEffect } from "react";
 import { Routes, Route, useRoutes } from "react-router-dom";
-import routes from "tempo-routes";
+import ErrorBoundary from "./components/admin/ErrorBoundary";
 import Home from "./components/home";
 import BlogPage from "./components/BlogPage";
 import { AuthProvider } from "./components/auth/AuthContext";
@@ -20,11 +20,37 @@ const UseCaseAdmin = lazy(() => import("./components/admin/UseCaseAdmin"));
 const UseCaseForm = lazy(() => import("./components/admin/UseCaseForm"));
 
 function App() {
-  // Get tempo routes when VITE_TEMPO is true
-  // @ts-ignore - tempo-routes is available at runtime
-  const tempoRoutes = useRoutes(
-    import.meta.env.VITE_TEMPO === "true" ? routes : [],
-  );
+  const [tempoRoutes, setTempoRoutes] = useState<any[] | null>(null);
+  const [routesLoaded, setRoutesLoaded] = useState(false);
+
+  // Load tempo routes only when in Tempo environment
+  useEffect(() => {
+    if (import.meta.env.VITE_TEMPO === "true") {
+      // Dynamic import to prevent initialization errors
+      import("tempo-routes")
+        .then((module) => {
+          if (module && module.default && Array.isArray(module.default)) {
+            setTempoRoutes(module.default);
+          } else {
+            console.warn("Tempo routes not found or not an array");
+          }
+        })
+        .catch((error) => {
+          console.error("Failed to load tempo routes:", error);
+        })
+        .finally(() => {
+          setRoutesLoaded(true);
+        });
+    } else {
+      setRoutesLoaded(true);
+    }
+  }, []);
+
+  // Only use routes if they're properly loaded and are an array
+  const tempoRoutesElement =
+    routesLoaded && tempoRoutes && Array.isArray(tempoRoutes)
+      ? useRoutes(tempoRoutes)
+      : null;
 
   return (
     <AuthProvider>
@@ -45,7 +71,9 @@ function App() {
               path="/admin/blog"
               element={
                 <ProtectedRoute>
-                  <BlogAdmin />
+                  <ErrorBoundary>
+                    <BlogAdmin />
+                  </ErrorBoundary>
                 </ProtectedRoute>
               }
             />
@@ -53,7 +81,11 @@ function App() {
               path="/admin/blog/new"
               element={
                 <ProtectedRoute>
-                  <BlogEditor />
+                  <ErrorBoundary>
+                    <Suspense fallback={<p>Loading editor...</p>}>
+                      <BlogEditor />
+                    </Suspense>
+                  </ErrorBoundary>
                 </ProtectedRoute>
               }
             />
@@ -61,7 +93,9 @@ function App() {
               path="/admin/blog/edit/:id"
               element={
                 <ProtectedRoute>
-                  <BlogEditor />
+                  <ErrorBoundary>
+                    <BlogEditor />
+                  </ErrorBoundary>
                 </ProtectedRoute>
               }
             />
@@ -98,7 +132,7 @@ function App() {
               }
             />
           </Routes>
-          {tempoRoutes}
+          {tempoRoutesElement}
         </>
       </Suspense>
     </AuthProvider>
