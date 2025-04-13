@@ -368,6 +368,9 @@ export const getBlogPostBySlug = async (
 // Replace the createBlogPost function in src/api/blog.ts with this improved version
 // that has better error handling
 
+// Replace the createBlogPost function in src/api/blog.ts with this fixed version
+// that properly handles UUID requirements
+
 export const createBlogPost = async (
   data: BlogPostFormData,
 ): Promise<BlogPost> => {
@@ -492,6 +495,10 @@ export const createBlogPost = async (
         throw new Error("Category not found");
       }
 
+      // Create a proper UUID for the author_id instead of using "current_user" string
+      // This is a demo UUID that will be used for all posts when actual user auth is not implemented
+      const demoAuthorId = "00000000-0000-4000-a000-000000000000"; // Using a fixed UUID for demo purposes
+
       // 2. Create the post
       const { data: postData, error: postError } = await supabase
         .from("blog_posts")
@@ -500,7 +507,7 @@ export const createBlogPost = async (
           slug,
           excerpt: data.excerpt,
           content: data.content,
-          author_id: "current_user", // In a real app, this would be the current user's ID
+          author_id: demoAuthorId, // Using a valid UUID format instead of "current_user"
           created_at: now,
           updated_at: now,
           published_at: data.status === "published" ? now : data.publishedAt,
