@@ -7,6 +7,7 @@ import NodSection from "./nod-section";
 import Team from "./team";
 import Footer from "./footer";
 import ContactModal from "./ContactModal";
+import EnvVariablesNotice from "./EnvVariablesNotice";
 
 function Home() {
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
@@ -19,6 +20,9 @@ function Home() {
     <div className="w-full min-h-screen bg-white">
       <Header onContactClick={handleContactClick} />
       <Hero onContactClick={handleContactClick} />
+      <div className="container mx-auto px-4 mt-4">
+        <EnvVariablesNotice />
+      </div>
       <Services />
       <Process onContactClick={handleContactClick} />
       <NodSection />

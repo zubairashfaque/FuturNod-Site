@@ -20,7 +20,7 @@ const Footer = () => {
             <ul className="space-y-2">
               <li>
                 <a
-                  href="#"
+                  href="/#services"
                   className="text-gray-600 hover:text-gray-900 transition-colors"
                 >
                   Chatbot Development
@@ -28,7 +28,7 @@ const Footer = () => {
               </li>
               <li>
                 <a
-                  href="#"
+                  href="/#services"
                   className="text-gray-600 hover:text-gray-900 transition-colors"
                 >
                   Workflow Automation
@@ -36,7 +36,7 @@ const Footer = () => {
               </li>
               <li>
                 <a
-                  href="#"
+                  href="/#services"
                   className="text-gray-600 hover:text-gray-900 transition-colors"
                 >
                   AI Consulting
@@ -50,7 +50,7 @@ const Footer = () => {
             <ul className="space-y-2">
               <li>
                 <a
-                  href="#"
+                  href="/#team"
                   className="text-gray-600 hover:text-gray-900 transition-colors"
                 >
                   Our Team
@@ -58,7 +58,7 @@ const Footer = () => {
               </li>
               <li>
                 <a
-                  href="#"
+                  href="/#process"
                   className="text-gray-600 hover:text-gray-900 transition-colors"
                 >
                   Process
@@ -67,6 +67,12 @@ const Footer = () => {
               <li>
                 <a
                   href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    document
+                      .querySelector('button[aria-label="Toggle menu"]')
+                      ?.click();
+                  }}
                   className="text-gray-600 hover:text-gray-900 transition-colors"
                 >
                   Contact
@@ -83,19 +89,25 @@ const Footer = () => {
 
           <div className="flex space-x-4">
             <a
-              href="#"
+              href="https://linkedin.com"
+              target="_blank"
+              rel="noopener noreferrer"
               className="text-gray-600 hover:text-gray-900 transition-colors"
             >
               <Linkedin className="h-5 w-5" />
             </a>
             <a
-              href="#"
+              href="https://twitter.com"
+              target="_blank"
+              rel="noopener noreferrer"
               className="text-gray-600 hover:text-gray-900 transition-colors"
             >
               <Twitter className="h-5 w-5" />
             </a>
             <a
-              href="#"
+              href="https://github.com"
+              target="_blank"
+              rel="noopener noreferrer"
               className="text-gray-600 hover:text-gray-900 transition-colors"
             >
               <Github className="h-5 w-5" />

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Search, Filter, ArrowRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,7 @@ interface BlogSectionProps {
 }
 
 const BlogSection: React.FC<BlogSectionProps> = ({ posts = defaultPosts }) => {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
 
@@ -42,6 +44,11 @@ const BlogSection: React.FC<BlogSectionProps> = ({ posts = defaultPosts }) => {
 
     return matchesSearch && matchesCategory;
   });
+
+  const handleReadArticle = (postId: string) => {
+    // Use navigate instead of direct window.location to ensure proper routing
+    navigate(`/blog/${postId}`);
+  };
 
   return (
     <section className="w-full py-20 bg-background">
@@ -139,7 +146,12 @@ const BlogSection: React.FC<BlogSectionProps> = ({ posts = defaultPosts }) => {
                           </p>
                         </div>
                       </div>
-                      <Button variant="ghost" size="sm" className="gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1"
+                        onClick={() => handleReadArticle(post.id)}
+                      >
                         Read <ArrowRight className="h-4 w-4" />
                       </Button>
                     </div>

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
@@ -14,174 +14,66 @@ import { Input } from "./ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import Header from "./header";
 import Footer from "./footer";
+import ContactModal from "./ContactModal";
+import BlogHeader from "./BlogHeader";
 import { Search, ArrowRight } from "lucide-react";
-
-interface BlogPost {
-  id: string;
-  title: string;
-  excerpt: string;
-  content: string;
-  author: {
-    name: string;
-    avatar: string;
-  };
-  date: string;
-  category: string;
-  tags: string[];
-  imageUrl: string;
-  readTime: number;
-}
-
-const MOCK_POSTS: BlogPost[] = [
-  {
-    id: "1",
-    title: "The Future of AI in Design",
-    excerpt:
-      "Exploring how artificial intelligence is transforming the design industry and what it means for designers.",
-    content:
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
-    author: {
-      name: "Jane Smith",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=jane",
-    },
-    date: "May 15, 2023",
-    category: "Technology",
-    tags: ["AI", "Design", "Future"],
-    imageUrl:
-      "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=800&q=80",
-    readTime: 5,
-  },
-  {
-    id: "2",
-    title: "Sustainable Web Development Practices",
-    excerpt:
-      "How to reduce the carbon footprint of your web applications while maintaining performance.",
-    content:
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
-    author: {
-      name: "John Doe",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=john",
-    },
-    date: "June 2, 2023",
-    category: "Development",
-    tags: ["Sustainability", "Web Development", "Performance"],
-    imageUrl:
-      "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800&q=80",
-    readTime: 7,
-  },
-  {
-    id: "3",
-    title: "User Experience in the Age of Voice Interfaces",
-    excerpt:
-      "How voice-controlled interfaces are changing the way we think about user experience design.",
-    content:
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
-    author: {
-      name: "Alex Johnson",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=alex",
-    },
-    date: "July 10, 2023",
-    category: "UX Design",
-    tags: ["Voice UI", "UX", "Design Trends"],
-    imageUrl:
-      "https://images.unsplash.com/photo-1519558260268-cde7e03a0152?w=800&q=80",
-    readTime: 4,
-  },
-  {
-    id: "4",
-    title: "The Rise of AI-Powered Automation",
-    excerpt:
-      "How businesses are leveraging artificial intelligence to automate processes and increase efficiency.",
-    content:
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
-    author: {
-      name: "Sarah Chen",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=sarah",
-    },
-    date: "August 5, 2023",
-    category: "Technology",
-    tags: ["AI", "Automation", "Business"],
-    imageUrl:
-      "https://images.unsplash.com/photo-1531746790731-6c087fecd65a?w=800&q=80",
-    readTime: 6,
-  },
-  {
-    id: "5",
-    title: "Designing for Accessibility",
-    excerpt:
-      "Best practices for creating inclusive digital experiences that work for everyone.",
-    content:
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
-    author: {
-      name: "Michael Wong",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=michael",
-    },
-    date: "September 12, 2023",
-    category: "Design",
-    tags: ["Accessibility", "Inclusive Design", "UX"],
-    imageUrl:
-      "https://images.unsplash.com/photo-1617791160505-6f00504e3519?w=800&q=80",
-    readTime: 8,
-  },
-  {
-    id: "6",
-    title: "The Future of Web3 and Decentralized Applications",
-    excerpt:
-      "Exploring the potential of blockchain technology and decentralized applications in reshaping the internet.",
-    content:
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
-    author: {
-      name: "David Park",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=david",
-    },
-    date: "October 3, 2023",
-    category: "Blockchain",
-    tags: ["Web3", "Blockchain", "Decentralization"],
-    imageUrl:
-      "https://images.unsplash.com/photo-1639762681057-408e52192e55?w=800&q=80",
-    readTime: 9,
-  },
-];
+import { getBlogPosts } from "../api/blog";
+import { BlogPost } from "../types/blog";
+import { useNavigate } from "react-router-dom";
 
 const BlogPage = () => {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
+  const [posts, setPosts] = useState<BlogPost[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const categories = [
-    "all",
-    "technology",
-    "development",
-    "design",
-    "ux design",
-    "blockchain",
-  ];
+  useEffect(() => {
+    const fetchPosts = async () => {
+      setIsLoading(true);
+      try {
+        // Only fetch published posts for the public blog page
+        const fetchedPosts = await getBlogPosts({
+          status: "published",
+          search: searchTerm,
+          categoryId: activeCategory !== "all" ? activeCategory : undefined,
+        });
+        setPosts(fetchedPosts);
+      } catch (error) {
+        console.error("Error fetching posts:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchPosts();
+  }, [searchTerm, activeCategory]);
 
   const handleContactClick = () => {
-    console.log("Contact clicked");
-    // Will implement modal opening logic later
+    setIsContactModalOpen(true);
   };
 
-  const filteredPosts = MOCK_POSTS.filter((post) => {
-    const matchesSearch =
-      searchTerm === "" ||
-      post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      post.excerpt.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      post.tags.some((tag) =>
-        tag.toLowerCase().includes(searchTerm.toLowerCase()),
-      );
+  // Extract unique categories from posts
+  const categories = [
+    "all",
+    ...new Set(posts.map((post) => post.category.slug.toLowerCase())),
+  ];
 
+  const filteredPosts = posts.filter((post) => {
     const matchesCategory =
       activeCategory === "all" ||
-      post.category.toLowerCase() === activeCategory.toLowerCase();
+      post.category.slug.toLowerCase() === activeCategory.toLowerCase();
 
-    return matchesSearch && matchesCategory;
+    return matchesCategory;
   });
 
   return (
     <div className="min-h-screen bg-white">
-      <Header onContactClick={handleContactClick} />
+      <Header onContactClick={handleContactClick} isOnBlogPage={true} />
 
       <main className="container mx-auto px-4 py-16">
+        <BlogHeader />
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -229,7 +121,11 @@ const BlogPage = () => {
           </Tabs>
         </div>
 
-        {filteredPosts.length > 0 ? (
+        {isLoading ? (
+          <div className="text-center py-20">
+            <h3 className="text-2xl font-semibold mb-4">Loading articles...</h3>
+          </div>
+        ) : filteredPosts.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
             {filteredPosts.map((post, index) => (
               <motion.div
@@ -241,7 +137,7 @@ const BlogPage = () => {
                 <Card className="h-full overflow-hidden hover:shadow-lg transition-all duration-300 border-0 bg-gray-50">
                   <div className="aspect-video w-full overflow-hidden">
                     <img
-                      src={post.imageUrl}
+                      src={post.featuredImage}
                       alt={post.title}
                       className="w-full h-full object-cover transition-transform hover:scale-105 duration-500"
                     />
@@ -252,7 +148,7 @@ const BlogPage = () => {
                         variant="secondary"
                         className="capitalize bg-gray-100 text-gray-800 hover:bg-gray-200"
                       >
-                        {post.category}
+                        {post.category.name}
                       </Badge>
                       <span className="text-xs text-gray-500">
                         {post.readTime} min read
@@ -276,7 +172,15 @@ const BlogPage = () => {
                         <p className="text-sm font-medium">
                           {post.author.name}
                         </p>
-                        <p className="text-xs text-gray-500">{post.date}</p>
+                        <p className="text-xs text-gray-500">
+                          {new Date(
+                            post.publishedAt || post.createdAt,
+                          ).toLocaleDateString("en-US", {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </p>
                       </div>
                     </div>
                   </CardContent>
@@ -284,6 +188,10 @@ const BlogPage = () => {
                     <Button
                       variant="ghost"
                       className="w-full justify-between group p-0 h-auto"
+                      onClick={() => {
+                        // Navigate to the blog post page using react-router
+                        navigate(`/blog/${post.slug}`);
+                      }}
                     >
                       <span className="text-sm font-medium">Read Article</span>
                       <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
@@ -314,6 +222,12 @@ const BlogPage = () => {
           <Button
             variant="outline"
             className="gap-2 border-gray-300 hover:bg-gray-50"
+            onClick={() => {
+              // In a real implementation, this would load more articles
+              console.log("Loading more articles...");
+              // For now, just scroll to top as a placeholder action
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
           >
             Load More Articles <ArrowRight className="h-4 w-4" />
           </Button>
@@ -321,6 +235,10 @@ const BlogPage = () => {
       </main>
 
       <Footer />
+      <ContactModal
+        isOpen={isContactModalOpen}
+        onClose={() => setIsContactModalOpen(false)}
+      />
     </div>
   );
 };
