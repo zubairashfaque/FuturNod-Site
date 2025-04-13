@@ -1,3 +1,4 @@
+// src/components/CreateBlog.tsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import ReactQuill from "react-quill";
@@ -24,11 +25,13 @@ import { Badge } from "./ui/badge";
 import { X, Calendar, Image } from "lucide-react";
 import { createBlogPost, getCategories, getTags } from "../api/blog";
 import { Category, Tag, BlogPostFormData } from "../types/blog";
-import { toast } from "./ui/use-toast";
+import Header from "./header";
+import Footer from "./footer";
 
 const CreateBlog = () => {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -53,13 +56,14 @@ const CreateBlog = () => {
         ]);
         setCategories(fetchedCategories);
         setTags(fetchedTags);
+
+        // Set default category if available
+        if (fetchedCategories.length > 0 && !formData.categoryId) {
+          setFormData(prev => ({ ...prev, categoryId: fetchedCategories[0].id }));
+        }
       } catch (error) {
         console.error("Error fetching categories and tags:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load categories and tags",
-          variant: "destructive",
-        });
+        setError("Failed to load categories and tags. Please try again.");
       }
     };
 
@@ -96,6 +100,7 @@ const CreateBlog = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setError(null);
 
     try {
       // Validate form data
@@ -112,296 +117,291 @@ const CreateBlog = () => {
         throw new Error("Category is required");
       }
 
+      console.log("Submitting form data:", formData);
       const newPost = await createBlogPost(formData);
-      toast({
-        title: "Success",
-        description: `Blog post "${formData.title}" has been created`,
-      });
+      console.log("Created post:", newPost);
 
-      // Navigate to the blog post or blog list
+      // Navigate to the blog post
       navigate(`/blog/${newPost.slug}`);
     } catch (error) {
       console.error("Error creating blog post:", error);
-      toast({
-        title: "Error",
-        description:
-          error instanceof Error ? error.message : "Failed to create blog post",
-        variant: "destructive",
-      });
+      setError(
+        error instanceof Error ? error.message : "Failed to create blog post"
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const modules = {
+    toolbar: [
+      [{ header: [1, 2, 3, 4, 5, 6, false] }],
+      ["bold", "italic", "underline", "strike"],
+      [{ list: "ordered" }, { list: "bullet" }],
+      ["blockquote", "code-block"],
+      [{ color: [] }, { background: [] }],
+      ["link", "image"],
+      ["clean"],
+    ],
+  };
+
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <Card className="bg-white shadow-md">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold">
-            Create New Blog Post
-          </CardTitle>
-        </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="title">Title</Label>
-              <Input
-                id="title"
-                name="title"
-                value={formData.title}
-                onChange={handleInputChange}
-                placeholder="Enter blog title"
-                required
-              />
-            </div>
+    <div className="min-h-screen bg-white">
+      <Header />
 
-            <div className="space-y-2">
-              <Label htmlFor="excerpt">Excerpt</Label>
-              <Textarea
-                id="excerpt"
-                name="excerpt"
-                value={formData.excerpt}
-                onChange={handleInputChange}
-                placeholder="Brief summary of your blog post"
-                rows={3}
-                required
-              />
-            </div>
+      <div className="container mx-auto px-4 py-16 max-w-4xl">
+        <Card className="bg-white shadow-md">
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold">
+              Create New Blog Post
+            </CardTitle>
+          </CardHeader>
 
-            <div className="space-y-2">
-              <Label htmlFor="content">Content</Label>
-              <div className="min-h-[300px] border rounded-md">
-                <ReactQuill
-                  theme="snow"
-                  value={formData.content}
-                  onChange={handleEditorChange}
-                  placeholder="Write your blog content here..."
-                  modules={{
-                    toolbar: [
-                      [{ header: [1, 2, 3, 4, 5, 6, false] }],
-                      ["bold", "italic", "underline", "strike"],
-                      [{ list: "ordered" }, { list: "bullet" }],
-                      ["blockquote", "code-block"],
-                      [{ color: [] }, { background: [] }],
-                      ["link", "image"],
-                      ["clean"],
-                    ],
-                  }}
-                  formats={[
-                    "header",
-                    "bold",
-                    "italic",
-                    "underline",
-                    "strike",
-                    "list",
-                    "bullet",
-                    "blockquote",
-                    "code-block",
-                    "color",
-                    "background",
-                    "link",
-                    "image",
-                  ]}
-                  className="h-[250px] mb-12"
+          {error && (
+            <div className="mx-6 mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-600">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit}>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="title">Title</Label>
+                <Input
+                  id="title"
+                  name="title"
+                  value={formData.title}
+                  onChange={handleInputChange}
+                  placeholder="Enter blog title"
+                  required
                 />
               </div>
-              <div className="text-xs text-gray-500 flex justify-between">
-                <span>Use fewer images to reduce content size</span>
-                <span>
-                  Size:{" "}
-                  {formData.content
-                    ? (new Blob([formData.content]).size / 1024).toFixed(2)
-                    : 0}
-                  KB
-                  {formData.content &&
-                    new Blob([formData.content]).size > 800 * 1024 && (
-                      <span className="text-amber-600 ml-2">
-                        ⚠️ Approaching size limit
-                      </span>
-                    )}
-                </span>
+
+              <div className="space-y-2">
+                <Label htmlFor="excerpt">Excerpt</Label>
+                <Textarea
+                  id="excerpt"
+                  name="excerpt"
+                  value={formData.excerpt}
+                  onChange={handleInputChange}
+                  placeholder="Brief summary of your blog post"
+                  rows={3}
+                  required
+                />
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="featuredImage">Featured Image</Label>
-              <div className="flex flex-col gap-2">
-                <div className="flex gap-2">
-                  <Input
-                    id="featuredImage"
-                    name="featuredImage"
-                    value={formData.featuredImage}
-                    onChange={handleInputChange}
-                    placeholder="Enter image URL"
-                    className="flex-1"
+              <div className="space-y-2">
+                <Label htmlFor="content">Content</Label>
+                <div className="min-h-[300px] border rounded-md">
+                  <ReactQuill
+                    theme="snow"
+                    value={formData.content}
+                    onChange={handleEditorChange}
+                    placeholder="Write your blog content here..."
+                    modules={modules}
+                    className="h-[250px] mb-12"
                   />
-                  <div className="relative">
+                </div>
+                <div className="text-xs text-gray-500 flex justify-between">
+                  <span>Use fewer images to reduce content size</span>
+                  <span>
+                    Size:{" "}
+                    {formData.content
+                      ? (new Blob([formData.content]).size / 1024).toFixed(2)
+                      : 0}
+                    KB
+                    {formData.content &&
+                      new Blob([formData.content]).size > 800 * 1024 && (
+                        <span className="text-amber-600 ml-2">
+                          ⚠️ Approaching size limit
+                        </span>
+                      )}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="featuredImage">Featured Image</Label>
+                <div className="flex flex-col gap-2">
+                  <div className="flex gap-2">
                     <Input
-                      type="file"
-                      id="imageUpload"
-                      accept="image/*"
-                      className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          // Convert to base64 for local storage
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            const result = reader.result as string;
-                            // Check if image is too large
-                            if (result.length > 1000000) {
-                              // Use a smaller version
-                              const img = new Image();
-                              img.onload = function () {
-                                const canvas = document.createElement("canvas");
-                                const ctx = canvas.getContext("2d");
-                                // Resize to smaller dimensions
-                                const maxWidth = 800;
-                                const maxHeight = 600;
-                                let width = img.width;
-                                let height = img.height;
+                      id="featuredImage"
+                      name="featuredImage"
+                      value={formData.featuredImage}
+                      onChange={handleInputChange}
+                      placeholder="Enter image URL"
+                      className="flex-1"
+                    />
+                    <div className="relative">
+                      <Input
+                        type="file"
+                        id="imageUpload"
+                        accept="image/*"
+                        className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            // Convert to base64 for local storage
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              const result = reader.result as string;
+                              // Check if image is too large
+                              if (result.length > 1000000) {
+                                // Use a smaller version
+                                const img = new Image();
+                                img.onload = function () {
+                                  const canvas = document.createElement("canvas");
+                                  const ctx = canvas.getContext("2d");
+                                  // Resize to smaller dimensions
+                                  const maxWidth = 800;
+                                  const maxHeight = 600;
+                                  let width = img.width;
+                                  let height = img.height;
 
-                                if (width > height) {
-                                  if (width > maxWidth) {
-                                    height *= maxWidth / width;
-                                    width = maxWidth;
+                                  if (width > height) {
+                                    if (width > maxWidth) {
+                                      height *= maxWidth / width;
+                                      width = maxWidth;
+                                    }
+                                  } else {
+                                    if (height > maxHeight) {
+                                      width *= maxHeight / height;
+                                      height = maxHeight;
+                                    }
                                   }
-                                } else {
-                                  if (height > maxHeight) {
-                                    width *= maxHeight / height;
-                                    height = maxHeight;
-                                  }
-                                }
 
-                                canvas.width = width;
-                                canvas.height = height;
-                                ctx?.drawImage(img, 0, 0, width, height);
+                                  canvas.width = width;
+                                  canvas.height = height;
+                                  ctx?.drawImage(img, 0, 0, width, height);
 
-                                // Get compressed image
-                                const compressedImage = canvas.toDataURL(
-                                  "image/jpeg",
-                                  0.7,
-                                );
+                                  // Get compressed image
+                                  const compressedImage = canvas.toDataURL(
+                                    "image/jpeg",
+                                    0.7,
+                                  );
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    featuredImage: compressedImage,
+                                  }));
+                                };
+                                img.src = result;
+                              } else {
                                 setFormData((prev) => ({
                                   ...prev,
-                                  featuredImage: compressedImage,
+                                  featuredImage: result,
                                 }));
-                              };
-                              img.src = result;
-                            } else {
-                              setFormData((prev) => ({
-                                ...prev,
-                                featuredImage: result,
-                              }));
-                            }
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="relative z-0 flex items-center gap-1"
-                    >
-                      <Image className="h-4 w-4" /> Upload
-                    </Button>
+                              }
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="relative z-0 flex items-center gap-1"
+                      >
+                        <Image className="h-4 w-4" /> Upload
+                      </Button>
+                    </div>
                   </div>
+                  <p className="text-xs text-gray-500">
+                    Enter a URL or upload an image file (max 2MB)
+                  </p>
                 </div>
-                <p className="text-xs text-gray-500">
-                  Enter a URL or upload an image file (max 2MB)
-                </p>
+                {formData.featuredImage && (
+                  <div className="mt-2 border rounded-md overflow-hidden h-40">
+                    <img
+                      src={formData.featuredImage}
+                      alt="Featured preview"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
               </div>
-              {formData.featuredImage && (
-                <div className="mt-2 border rounded-md overflow-hidden h-40">
-                  <img
-                    src={formData.featuredImage}
-                    alt="Featured preview"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              )}
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
-              <Select
-                value={formData.categoryId}
-                onValueChange={(value) =>
-                  handleSelectChange("categoryId", value)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name}
-                    </SelectItem>
+              <div className="space-y-2">
+                <Label htmlFor="category">Category</Label>
+                <Select
+                  value={formData.categoryId}
+                  onValueChange={(value) =>
+                    handleSelectChange("categoryId", value)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Tags</Label>
+                <div className="flex flex-wrap gap-2">
+                  {tags.map((tag) => (
+                    <Badge
+                      key={tag.id}
+                      variant={
+                        selectedTags.includes(tag.id) ? "default" : "outline"
+                      }
+                      className="cursor-pointer"
+                      onClick={() => handleTagSelect(tag.id)}
+                    >
+                      {tag.name}
+                      {selectedTags.includes(tag.id) && (
+                        <X className="ml-1 h-3 w-3" />
+                      )}
+                    </Badge>
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Tags</Label>
-              <div className="flex flex-wrap gap-2">
-                {tags.map((tag) => (
-                  <Badge
-                    key={tag.id}
-                    variant={
-                      selectedTags.includes(tag.id) ? "default" : "outline"
-                    }
-                    className="cursor-pointer"
-                    onClick={() => handleTagSelect(tag.id)}
-                  >
-                    {tag.name}
-                    {selectedTags.includes(tag.id) && (
-                      <X className="ml-1 h-3 w-3" />
-                    )}
-                  </Badge>
-                ))}
+                </div>
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select
-                value={formData.status}
-                onValueChange={(value) =>
-                  handleSelectChange(
-                    "status",
-                    value as "draft" | "published" | "scheduled",
-                  )
-                }
+              <div className="space-y-2">
+                <Label htmlFor="status">Status</Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value) =>
+                    handleSelectChange(
+                      "status",
+                      value as "draft" | "published" | "scheduled",
+                    )
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="published">Published</SelectItem>
+                    <SelectItem value="scheduled">Scheduled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+
+            <CardFooter className="flex justify-between">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => navigate("/blog")}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="published">Published</SelectItem>
-                  <SelectItem value="scheduled">Scheduled</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Creating..." : "Create Blog Post"}
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
+      </div>
 
-          <CardFooter className="flex justify-between">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate(-1)}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Creating..." : "Create Blog Post"}
-            </Button>
-          </CardFooter>
-        </form>
-      </Card>
+      <Footer />
     </div>
   );
 };
