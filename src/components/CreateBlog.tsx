@@ -22,15 +22,17 @@ import {
 } from "./ui/card";
 import { Label } from "./ui/label";
 import { Badge } from "./ui/badge";
-import { X, Calendar, Image } from "lucide-react";
+import { X, Calendar, Image, AlertTriangle } from "lucide-react";
 import { createBlogPost, getCategories, getTags } from "../api/blog";
 import { Category, Tag, BlogPostFormData } from "../types/blog";
 import Header from "./header";
 import Footer from "./footer";
+import ContactModal from "./ContactModal";
 
 const CreateBlog = () => {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -41,19 +43,27 @@ const CreateBlog = () => {
     content: "",
     categoryId: "",
     tagIds: [],
-    featuredImage:
-      "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=800&q=80",
+    featuredImage: "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=800&q=80",
     status: "draft",
     publishedAt: null,
   });
 
+  const handleContactClick = () => {
+    setIsContactModalOpen(true);
+  };
+
   useEffect(() => {
     const fetchCategoriesAndTags = async () => {
       try {
+        console.log("Fetching categories and tags...");
         const [fetchedCategories, fetchedTags] = await Promise.all([
           getCategories(),
           getTags(),
         ]);
+        
+        console.log("Categories:", fetchedCategories);
+        console.log("Tags:", fetchedTags);
+        
         setCategories(fetchedCategories);
         setTags(fetchedTags);
 
@@ -118,6 +128,7 @@ const CreateBlog = () => {
       }
 
       console.log("Submitting form data:", formData);
+      
       const newPost = await createBlogPost(formData);
       console.log("Created post:", newPost);
 
@@ -147,7 +158,7 @@ const CreateBlog = () => {
 
   return (
     <div className="min-h-screen bg-white">
-      <Header />
+      <Header onContactClick={handleContactClick} />
 
       <div className="container mx-auto px-4 py-16 max-w-4xl">
         <Card className="bg-white shadow-md">
@@ -158,8 +169,12 @@ const CreateBlog = () => {
           </CardHeader>
 
           {error && (
-            <div className="mx-6 mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-600">
-              {error}
+            <div className="mx-6 mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-600 flex items-start gap-2">
+              <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-medium">Error</p>
+                <p>{error}</p>
+              </div>
             </div>
           )}
 
@@ -241,7 +256,7 @@ const CreateBlog = () => {
                         onChange={(e) => {
                           const file = e.target.files?.[0];
                           if (file) {
-                            // Convert to base64 for local storage
+                            // Convert to base64 for storage
                             const reader = new FileReader();
                             reader.onloadend = () => {
                               const result = reader.result as string;
@@ -332,33 +347,43 @@ const CreateBlog = () => {
                     <SelectValue placeholder="Select a category" />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map((category) => (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.name}
+                    {categories.length === 0 ? (
+                      <SelectItem value="loading" disabled>
+                        No categories available
                       </SelectItem>
-                    ))}
+                    ) : (
+                      categories.map((category) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          {category.name}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
                 <Label>Tags</Label>
-                <div className="flex flex-wrap gap-2">
-                  {tags.map((tag) => (
-                    <Badge
-                      key={tag.id}
-                      variant={
-                        selectedTags.includes(tag.id) ? "default" : "outline"
-                      }
-                      className="cursor-pointer"
-                      onClick={() => handleTagSelect(tag.id)}
-                    >
-                      {tag.name}
-                      {selectedTags.includes(tag.id) && (
-                        <X className="ml-1 h-3 w-3" />
-                      )}
-                    </Badge>
-                  ))}
+                <div className="flex flex-wrap gap-2 p-2 border rounded-md min-h-[60px]">
+                  {tags.length === 0 ? (
+                    <p className="text-sm text-gray-500 p-2">No tags available</p>
+                  ) : (
+                    tags.map((tag) => (
+                      <Badge
+                        key={tag.id}
+                        variant={
+                          selectedTags.includes(tag.id) ? "default" : "outline"
+                        }
+                        className="cursor-pointer"
+                        onClick={() => handleTagSelect(tag.id)}
+                      >
+                        {tag.name}
+                        {selectedTags.includes(tag.id) && (
+                          <X className="ml-1 h-3 w-3" />
+                        )}
+                      </Badge>
+                    ))
+                  )}
                 </div>
               </div>
 
@@ -402,6 +427,10 @@ const CreateBlog = () => {
       </div>
 
       <Footer />
+      <ContactModal
+        isOpen={isContactModalOpen}
+        onClose={() => setIsContactModalOpen(false)}
+      />
     </div>
   );
 };
