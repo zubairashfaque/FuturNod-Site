@@ -42,26 +42,90 @@ const TAGS_STORAGE_KEY = "blog_tags";
 
 // Initialize local storage with mock data if empty
 const initializeLocalStorage = () => {
-  if (!localStorage.getItem(CATEGORIES_STORAGE_KEY)) {
-    localStorage.setItem(
-      CATEGORIES_STORAGE_KEY,
-      JSON.stringify(MOCK_CATEGORIES),
-    );
-  }
+  try {
+    // Check for corrupted storage and reset if needed
+    const checkAndReset = (key: string) => {
+      try {
+        const value = localStorage.getItem(key);
+        if (value === "undefined" || value === "null") {
+          console.warn(`Corrupted localStorage for ${key}, resetting it`);
+          localStorage.removeItem(key);
+          return true;
+        }
+        return false;
+      } catch (e) {
+        console.error(`Error checking localStorage for ${key}:`, e);
+        return false;
+      }
+    };
 
-  if (!localStorage.getItem(TAGS_STORAGE_KEY)) {
-    localStorage.setItem(TAGS_STORAGE_KEY, JSON.stringify(MOCK_TAGS));
-  }
+    // Reset corrupted storage if needed
+    checkAndReset(CATEGORIES_STORAGE_KEY);
+    checkAndReset(TAGS_STORAGE_KEY);
+    checkAndReset(BLOG_POSTS_STORAGE_KEY);
 
-  if (!localStorage.getItem(BLOG_POSTS_STORAGE_KEY)) {
-    // Import mock posts from the BlogPage component
-    const mockPosts = JSON.parse(localStorage.getItem("mock_posts") || "[]");
-    localStorage.setItem(BLOG_POSTS_STORAGE_KEY, JSON.stringify(mockPosts));
+    // Initialize categories
+    if (!localStorage.getItem(CATEGORIES_STORAGE_KEY)) {
+      console.log("Initializing categories with mock data");
+      localStorage.setItem(
+        CATEGORIES_STORAGE_KEY,
+        JSON.stringify(MOCK_CATEGORIES),
+      );
+    }
+
+    // Initialize tags
+    if (!localStorage.getItem(TAGS_STORAGE_KEY)) {
+      console.log("Initializing tags with mock data");
+      localStorage.setItem(TAGS_STORAGE_KEY, JSON.stringify(MOCK_TAGS));
+    }
+
+    // Initialize blog posts
+    if (!localStorage.getItem(BLOG_POSTS_STORAGE_KEY)) {
+      // Import mock posts from the BlogPage component
+      try {
+        const mockPosts = JSON.parse(
+          localStorage.getItem("mock_posts") || "[]",
+        );
+        console.log("Initializing blog posts with mock data");
+        localStorage.setItem(BLOG_POSTS_STORAGE_KEY, JSON.stringify(mockPosts));
+      } catch (e) {
+        console.warn(
+          "Error parsing mock posts, initializing with empty array",
+          e,
+        );
+        localStorage.setItem(BLOG_POSTS_STORAGE_KEY, JSON.stringify([]));
+      }
+    }
+
+    // Verify initialization was successful
+    try {
+      const categories = JSON.parse(
+        localStorage.getItem(CATEGORIES_STORAGE_KEY) || "[]",
+      );
+      const tags = JSON.parse(localStorage.getItem(TAGS_STORAGE_KEY) || "[]");
+      const posts = JSON.parse(
+        localStorage.getItem(BLOG_POSTS_STORAGE_KEY) || "[]",
+      );
+
+      console.log("LocalStorage initialized with:", {
+        categoriesCount: categories.length,
+        tagsCount: tags.length,
+        postsCount: posts.length,
+      });
+    } catch (e) {
+      console.error("Error verifying localStorage initialization:", e);
+    }
+  } catch (error) {
+    console.error("Failed to initialize localStorage:", error);
   }
 };
 
 // Initialize on module load
-initializeLocalStorage();
+try {
+  initializeLocalStorage();
+} catch (e) {
+  console.error("Error during localStorage initialization:", e);
+}
 
 // Helper function to generate a slug from a title
 export const generateSlug = (title: string): string => {
@@ -375,6 +439,13 @@ export const createBlogPost = async (
   data: BlogPostFormData,
 ): Promise<BlogPost> => {
   try {
+    console.log("Creating blog post with data:", {
+      ...data,
+      content: data.content
+        ? `${data.content.substring(0, 50)}... (truncated)`
+        : null,
+    });
+
     // Validate required fields before sending to the server
     if (!data.title || !data.title.trim()) {
       throw new Error("Title is required");
@@ -390,10 +461,7 @@ export const createBlogPost = async (
     }
 
     // Add a small delay to ensure UI feedback works properly
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    const delay = Math.random() * 800 + 400; // Simulate network delay
-    await new Promise((resolve) => setTimeout(resolve, delay));
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
     // Set default featured image if not provided
     let featuredImage =
@@ -405,10 +473,51 @@ export const createBlogPost = async (
       featuredImage.startsWith("data:image") &&
       featuredImage.length > 1000000
     ) {
-      // Use a placeholder instead
-      console.warn("Image too large, using placeholder");
-      featuredImage =
-        "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=800&q=80";
+      // Compress the image instead of replacing it
+      try {
+        console.log("Compressing large image...");
+        const img = new Image();
+        img.src = featuredImage;
+
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+        });
+
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+
+        // Resize to smaller dimensions
+        const maxWidth = 800;
+        const maxHeight = 600;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width *= maxHeight / height;
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        // Get compressed image
+        featuredImage = canvas.toDataURL("image/jpeg", 0.6);
+        console.log("Image compressed successfully");
+      } catch (compressionError) {
+        console.error("Error compressing image:", compressionError);
+        // Fallback to placeholder if compression fails
+        featuredImage =
+          "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=800&q=80";
+      }
     }
 
     const now = new Date().toISOString();
@@ -416,27 +525,70 @@ export const createBlogPost = async (
     const readTime = calculateReadTime(data.content);
 
     if (useLocalStorageFallback()) {
-      // Use localStorage
-      const posts = JSON.parse(
-        localStorage.getItem(BLOG_POSTS_STORAGE_KEY) || "[]",
-      ) as BlogPost[];
-      const categories = JSON.parse(
-        localStorage.getItem(CATEGORIES_STORAGE_KEY) || "[]",
-      ) as Category[];
-      const tags = JSON.parse(
-        localStorage.getItem(TAGS_STORAGE_KEY) || "[]",
-      ) as Tag[];
-
-      const category = categories.find((cat) => cat.id === data.categoryId);
-      if (!category) {
-        throw new Error("Category not found");
-      }
-
-      // Handle empty tagIds array
-      const tagIds = data.tagIds || [];
-      const selectedTags = tags.filter((tag) => tagIds.includes(tag.id));
-
+      console.log("Using localStorage fallback for createBlogPost");
       try {
+        // Initialize mock data first to ensure it exists
+        // Initialize categories if empty
+        if (
+          !localStorage.getItem(CATEGORIES_STORAGE_KEY) ||
+          JSON.parse(localStorage.getItem(CATEGORIES_STORAGE_KEY) || "[]")
+            .length === 0
+        ) {
+          console.log("Initializing categories with mock data");
+          localStorage.setItem(
+            CATEGORIES_STORAGE_KEY,
+            JSON.stringify(MOCK_CATEGORIES),
+          );
+        }
+
+        // Initialize tags if empty
+        if (
+          !localStorage.getItem(TAGS_STORAGE_KEY) ||
+          JSON.parse(localStorage.getItem(TAGS_STORAGE_KEY) || "[]").length ===
+            0
+        ) {
+          console.log("Initializing tags with mock data");
+          localStorage.setItem(TAGS_STORAGE_KEY, JSON.stringify(MOCK_TAGS));
+        }
+
+        // Initialize blog posts if empty
+        if (!localStorage.getItem(BLOG_POSTS_STORAGE_KEY)) {
+          console.log("Initializing blog posts storage");
+          localStorage.setItem(BLOG_POSTS_STORAGE_KEY, JSON.stringify([]));
+        }
+
+        // Use localStorage
+        const posts = JSON.parse(
+          localStorage.getItem(BLOG_POSTS_STORAGE_KEY) || "[]",
+        ) as BlogPost[];
+        const categories = JSON.parse(
+          localStorage.getItem(CATEGORIES_STORAGE_KEY) || "[]",
+        ) as Category[];
+        const tags = JSON.parse(
+          localStorage.getItem(TAGS_STORAGE_KEY) || "[]",
+        ) as Tag[];
+
+        console.log("Loaded from localStorage:", {
+          postsCount: posts.length,
+          categoriesCount: categories.length,
+          tagsCount: tags.length,
+        });
+
+        // Find category or use fallback
+        let category = categories.find((cat) => cat.id === data.categoryId);
+        if (!category && categories.length > 0) {
+          console.log("Category not found, using first available category");
+          data.categoryId = categories[0].id;
+          category = categories[0];
+        } else if (!category) {
+          console.error("No categories available");
+          throw new Error("No categories available");
+        }
+
+        // Handle empty tagIds array
+        const tagIds = data.tagIds || [];
+        const selectedTags = tags.filter((tag) => tagIds.includes(tag.id));
+
         // Compress content if it's too large
         let compressedContent = data.content;
         if (compressedContent.length > 50000) {
@@ -449,8 +601,8 @@ export const createBlogPost = async (
           id: `post_${Date.now()}`,
           slug,
           author: {
-            id: "current_user", // In a real app, this would be the current user's ID
-            name: "Current User", // In a real app, this would be the current user's name
+            id: "current_user",
+            name: "Current User",
             avatar:
               "https://api.dicebear.com/7.x/avataaars/svg?seed=currentuser",
           },
@@ -458,31 +610,50 @@ export const createBlogPost = async (
           updatedAt: now,
           publishedAt: data.status === "published" ? now : data.publishedAt,
           readTime,
-          category,
+          category: category,
           tags: selectedTags,
           featuredImage,
           title: data.title,
           excerpt: data.excerpt,
           content: compressedContent,
-          status: data.status || "draft", // Ensure status has a default value
+          status: data.status || "draft",
         };
 
-        posts.push(newPost);
+        // Save to localStorage with error handling
         try {
-          localStorage.setItem(BLOG_POSTS_STORAGE_KEY, JSON.stringify(posts));
+          posts.push(newPost);
+          const postsJson = JSON.stringify(posts);
+          localStorage.setItem(BLOG_POSTS_STORAGE_KEY, postsJson);
+          console.log(
+            "Blog post saved to localStorage successfully",
+            newPost.id,
+          );
+          return newPost;
         } catch (storageError) {
-          console.error("LocalStorage error:", storageError);
-          throw new Error("Failed to save post due to storage limitations. Try using a smaller content or image.");
+          console.error("Error storing post in localStorage:", storageError);
+          // Try to store with a smaller image if it might be a quota issue
+          if (featuredImage.startsWith("data:image")) {
+            console.log("Trying with placeholder image instead");
+            newPost.featuredImage =
+              "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=800&q=80";
+            posts.push(newPost);
+            localStorage.setItem(BLOG_POSTS_STORAGE_KEY, JSON.stringify(posts));
+            return newPost;
+          }
+          throw new Error(
+            "Failed to save post due to storage limitations. Try using a smaller image.",
+          );
         }
-
-        return newPost;
-      } catch (storageError) {
-        console.error("Error storing post in localStorage:", storageError);
+      } catch (localStorageError) {
+        console.error("Critical localStorage error:", localStorageError);
         throw new Error(
-          "Failed to save post due to storage limitations. Try using a smaller image or content.",
+          localStorageError instanceof Error
+            ? localStorageError.message
+            : "Failed to save blog post to local storage",
         );
       }
     } else {
+      console.log("Using Supabase for createBlogPost");
       // Use Supabase
       // 1. Verify category exists
       const { data: categoryData, error: categoryError } = await supabase
@@ -492,12 +663,12 @@ export const createBlogPost = async (
         .single();
 
       if (categoryError || !categoryData) {
+        console.error("Category not found:", categoryError);
         throw new Error("Category not found");
       }
 
-      // Create a proper UUID for the author_id instead of using "current_user" string
-      // This is a demo UUID that will be used for all posts when actual user auth is not implemented
-      const demoAuthorId = "00000000-0000-4000-a000-000000000000"; // Using a fixed UUID for demo purposes
+      // Create a proper UUID for the author_id
+      const demoAuthorId = "00000000-0000-4000-a000-000000000000";
 
       // 2. Create the post
       const { data: postData, error: postError } = await supabase
@@ -507,11 +678,11 @@ export const createBlogPost = async (
           slug,
           excerpt: data.excerpt,
           content: data.content,
-          author_id: demoAuthorId, // Using a valid UUID format instead of "current_user"
+          author_id: demoAuthorId,
           created_at: now,
           updated_at: now,
           published_at: data.status === "published" ? now : data.publishedAt,
-          status: data.status || "draft", // Ensure status has a default value
+          status: data.status || "draft",
           category_id: data.categoryId,
           featured_image: featuredImage,
           read_time: readTime,
@@ -520,7 +691,10 @@ export const createBlogPost = async (
         .single();
 
       if (postError || !postData) {
-        throw new Error(`Failed to create blog post: ${postError?.message || "Unknown error"}`);
+        console.error("Error creating blog post:", postError);
+        throw new Error(
+          `Failed to create blog post: ${postError?.message || "Unknown error"}`,
+        );
       }
 
       // 3. Add tags if any

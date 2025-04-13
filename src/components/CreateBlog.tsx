@@ -143,15 +143,52 @@ const CreateBlog = () => {
 
       console.log("Submitting form data:", formData);
 
+      // Save featured image to localStorage for persistence
+      try {
+        if (formData.featuredImage) {
+          localStorage.setItem("lastUsedFeaturedImage", formData.featuredImage);
+        }
+      } catch (storageError) {
+        console.warn(
+          "Could not save featured image to localStorage:",
+          storageError,
+        );
+        // Continue anyway - this is not critical
+      }
+
+      // Clear localStorage if it might be corrupted
+      try {
+        const testStorage = localStorage.getItem("blog_posts");
+        if (
+          testStorage &&
+          (testStorage === "undefined" || testStorage === "null")
+        ) {
+          console.warn("Detected corrupted localStorage, clearing it");
+          localStorage.removeItem("blog_posts");
+        }
+      } catch (e) {
+        console.warn("Error checking localStorage:", e);
+      }
+
+      console.log("Calling createBlogPost with data:", {
+        ...formData,
+        content:
+          formData.content.length > 100
+            ? `${formData.content.substring(0, 100)}... (truncated for logging)`
+            : formData.content,
+      });
+
       const newPost = await createBlogPost(formData);
-      console.log("Created post:", newPost);
+      console.log("Created post successfully:", newPost.id);
 
       // Navigate to the blog post
       navigate(`/blog/${newPost.slug}`);
     } catch (error) {
       console.error("Error creating blog post:", error);
       setError(
-        error instanceof Error ? error.message : "Failed to create blog post",
+        error instanceof Error
+          ? error.message
+          : "Failed to create blog post. Please try again with a smaller image or less content.",
       );
     } finally {
       setIsSubmitting(false);
