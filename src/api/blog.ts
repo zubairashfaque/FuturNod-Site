@@ -365,38 +365,32 @@ export const getBlogPostBySlug = async (
   }
 };
 
+// Replace the createBlogPost function in src/api/blog.ts with this improved version
+// that has better error handling
+
 export const createBlogPost = async (
   data: BlogPostFormData,
 ): Promise<BlogPost> => {
   try {
     // Validate required fields before sending to the server
-    if (!data.title) throw new Error("Title is required");
-    if (!data.excerpt) throw new Error("Excerpt is required");
-    if (!data.content) throw new Error("Content is required");
-    if (!data.categoryId) throw new Error("Category is required");
+    if (!data.title || !data.title.trim()) {
+      throw new Error("Title is required");
+    }
+    if (!data.excerpt || !data.excerpt.trim()) {
+      throw new Error("Excerpt is required");
+    }
+    if (!data.content || !data.content.trim()) {
+      throw new Error("Content is required");
+    }
+    if (!data.categoryId) {
+      throw new Error("Category is required");
+    }
 
     // Add a small delay to ensure UI feedback works properly
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     const delay = Math.random() * 800 + 400; // Simulate network delay
     await new Promise((resolve) => setTimeout(resolve, delay));
-
-    // Validate required fields
-    if (!data.title.trim()) {
-      throw new Error("Title is required");
-    }
-
-    if (!data.excerpt.trim()) {
-      throw new Error("Excerpt is required");
-    }
-
-    if (!data.content.trim()) {
-      throw new Error("Content is required");
-    }
-
-    if (!data.categoryId) {
-      throw new Error("Category is required");
-    }
 
     // Set default featured image if not provided
     let featuredImage =
@@ -467,17 +461,22 @@ export const createBlogPost = async (
           title: data.title,
           excerpt: data.excerpt,
           content: compressedContent,
-          status: data.status,
+          status: data.status || "draft", // Ensure status has a default value
         };
 
         posts.push(newPost);
-        localStorage.setItem(BLOG_POSTS_STORAGE_KEY, JSON.stringify(posts));
+        try {
+          localStorage.setItem(BLOG_POSTS_STORAGE_KEY, JSON.stringify(posts));
+        } catch (storageError) {
+          console.error("LocalStorage error:", storageError);
+          throw new Error("Failed to save post due to storage limitations. Try using a smaller content or image.");
+        }
 
         return newPost;
       } catch (storageError) {
         console.error("Error storing post in localStorage:", storageError);
         throw new Error(
-          "Failed to save post due to storage limitations. Try using a smaller image.",
+          "Failed to save post due to storage limitations. Try using a smaller image or content.",
         );
       }
     } else {
@@ -505,7 +504,7 @@ export const createBlogPost = async (
           created_at: now,
           updated_at: now,
           published_at: data.status === "published" ? now : data.publishedAt,
-          status: data.status,
+          status: data.status || "draft", // Ensure status has a default value
           category_id: data.categoryId,
           featured_image: featuredImage,
           read_time: readTime,
@@ -514,7 +513,7 @@ export const createBlogPost = async (
         .single();
 
       if (postError || !postData) {
-        throw new Error("Failed to create blog post");
+        throw new Error(`Failed to create blog post: ${postError?.message || "Unknown error"}`);
       }
 
       // 3. Add tags if any
@@ -535,7 +534,11 @@ export const createBlogPost = async (
       }
 
       // 4. Return the complete post
-      return getBlogPostById(postData.id) as Promise<BlogPost>;
+      const createdPost = await getBlogPostById(postData.id);
+      if (!createdPost) {
+        throw new Error("Post was created but could not be retrieved");
+      }
+      return createdPost;
     }
   } catch (error) {
     console.error("Error creating blog post:", error);
