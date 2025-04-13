@@ -8,15 +8,12 @@ import Footer from "./footer";
 import ContactModal from "./ContactModal";
 import { getBlogPostBySlug } from "../api/blog";
 import { BlogPost } from "../types/blog";
-// Import React Markdown and plugins
+// Import React Markdown and only the essential plugins
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
-import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
 // Import markdown styles
 import '../styles/markdown.css';
-// Import syntax highlighting styles
-import 'highlight.js/styles/github.css';
 
 interface BlogPostDetailProps {
   slug?: string;
@@ -153,7 +150,7 @@ const BlogPostDetail = (props: BlogPostDetailProps) => {
                 <ReactMarkdown
                   className="markdown-body" // Use your markdown-body class
                   remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeRaw, rehypeHighlight]}
+                  rehypePlugins={[rehypeRaw]}
                 >
                   {post.content}
                 </ReactMarkdown>
