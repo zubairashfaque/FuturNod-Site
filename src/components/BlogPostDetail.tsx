@@ -1,10 +1,13 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Calendar, User, Clock, Tag } from "lucide-react";
 import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
 import Header from "./header";
 import Footer from "./footer";
 import ContactModal from "./ContactModal";
+import { getBlogPostBySlug } from "../api/blog";
+import { BlogPost } from "../types/blog";
 
 interface BlogPostDetailProps {
   slug?: string;
@@ -16,10 +19,41 @@ const BlogPostDetail = (props: BlogPostDetailProps) => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [post, setPost] = useState<BlogPost | null>(null);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
+
+  useEffect(() => {
+    const fetchPost = async () => {
+      if (!slug) return;
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const fetchedPost = await getBlogPostBySlug(slug);
+        setPost(fetchedPost);
+      } catch (err) {
+        console.error(`Error fetching post with slug ${slug}:`, err);
+        setError("Failed to load blog post. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchPost();
+  }, [slug]);
 
   const handleContactClick = () => {
     setIsContactModalOpen(true);
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
   };
 
   return (
@@ -35,16 +69,74 @@ const BlogPostDetail = (props: BlogPostDetailProps) => {
           <ArrowLeft className="h-4 w-4" /> Back to Blog
         </Button>
 
-        <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-3xl font-bold mb-6">
-            Blog Post Detail is being rebuilt
-          </h1>
-          <p className="mb-8 text-gray-600">
-            We're currently rebuilding our blog system to provide you with a
-            better experience. Please check back soon.
-          </p>
-          <Button onClick={() => navigate("/blog")}>Back to Blog</Button>
-        </div>
+        {isLoading ? (
+          <div className="flex justify-center items-center py-16">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+          </div>
+        ) : error || !post ? (
+          <div className="max-w-4xl mx-auto text-center">
+            <h1 className="text-3xl font-bold mb-6">
+              {error || "Blog post not found"}
+            </h1>
+            <p className="mb-8 text-gray-600">
+              We couldn't find the blog post you're looking for.
+            </p>
+            <Button onClick={() => navigate("/blog")}>Back to Blog</Button>
+          </div>
+        ) : (
+          <article className="max-w-4xl mx-auto">
+            {post.featuredImage && (
+              <div className="mb-8 rounded-lg overflow-hidden h-[400px]">
+                <img
+                  src={post.featuredImage}
+                  alt={post.title}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
+
+            <h1 className="text-4xl font-bold mb-4">{post.title}</h1>
+
+            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 mb-8">
+              <div className="flex items-center gap-1">
+                <Calendar className="h-4 w-4" />
+                <span>{formatDate(post.publishedAt || post.createdAt)}</span>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <User className="h-4 w-4" />
+                <span>{post.author.name}</span>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <Clock className="h-4 w-4" />
+                <span>{post.readTime} min read</span>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <Tag className="h-4 w-4" />
+                <span>{post.category.name}</span>
+              </div>
+            </div>
+
+            <div className="prose prose-lg max-w-none mb-8">
+              <div dangerouslySetInnerHTML={{ __html: post.content }} />
+            </div>
+
+            {post.tags.length > 0 && (
+              <div className="mt-8 pt-8 border-t">
+                <h3 className="text-lg font-semibold mb-4">Tags</h3>
+                <div className="flex flex-wrap gap-2">
+                  {post.tags.map((tag) => (
+                    <Badge key={tag.id} variant="secondary">
+                      {tag.name}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </article>
+        )}
       </main>
 
       <Footer />

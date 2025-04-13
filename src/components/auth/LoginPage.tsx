@@ -25,8 +25,8 @@ const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Get the redirect path from location state or default to /admin/blog
-  const from = location.state?.from?.pathname || "/admin/blog";
+  // Get the redirect path from location state or default to /admin/AdminDashboard
+  const from = location.state?.from?.pathname || "/admin/AdminDashboard";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,8 +36,8 @@ const LoginPage = () => {
     try {
       const success = await login(username, password);
       if (success) {
-        // Always navigate to /admin/blog after successful login
-        navigate("/admin/blog", { replace: true });
+        // Always navigate to /admin/AdminDashboard after successful login
+        navigate("/admin/AdminDashboard", { replace: true });
       } else {
         setError("Invalid username or password");
       }

@@ -1,22 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
-import { Input } from "../ui/input";
-import { Textarea } from "../ui/textarea";
-import { Label } from "../ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
-import { ArrowLeft, AlertCircle, Save, Trash, Eye } from "lucide-react";
+import { ArrowLeft, AlertCircle, Save, Eye, Search } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import EnvVariablesNotice from "../EnvVariablesNotice";
-import { BlogPostFormData } from "../../types/blog";
+import { Author, BlogPostFormData } from "../../types/blog";
 import {
   getBlogPostById,
   createBlogPost,
@@ -24,12 +14,26 @@ import {
   getCategories,
   getTags,
 } from "../../api/blog";
-import ReactQuill from "react-quill";
-import "react-quill/dist/quill.snow.css";
-import { Checkbox } from "../ui/checkbox";
+import { supabase } from "../../lib/supabase";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import "@uiw/react-md-editor/markdown-editor.css";
+import "@uiw/react-markdown-preview/markdown.css";
+
+// Import the new extracted components
+import ContentInput from "./blog/ContentInput";
+import ImageUpload from "./blog/ImageUpload";
+import {
+  TextField,
+  CategorySelect,
+  AuthorSelect,
+  StatusSelect,
+  TagsCheckboxGroup,
+} from "./blog/FormFields";
 
 const BlogEditor = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const isEditing = Boolean(id);
@@ -41,6 +45,17 @@ const BlogEditor = () => {
     Array<{ id: string; name: string }>
   >([]);
   const [tags, setTags] = useState<Array<{ id: string; name: string }>>([]);
+  const [authors, setAuthors] = useState<Author[]>([]);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [contentInputMethod, setContentInputMethod] = useState<
+    "editor" | "upload"
+  >("editor");
+  const [markdownFile, setMarkdownFile] = useState<File | null>(null);
+  const [isEditingUploadedContent, setIsEditingUploadedContent] =
+    useState(false);
   const [formData, setFormData] = useState<BlogPostFormData>({
     title: "",
     excerpt: "",
@@ -50,11 +65,21 @@ const BlogEditor = () => {
     featuredImage: "",
     status: "draft",
     publishedAt: null,
+    authorId: "",
   });
 
-  // Fetch categories and tags on component mount
+  // Parse search query from URL on component mount
   useEffect(() => {
-    const fetchCategoriesAndTags = async () => {
+    const queryParams = new URLSearchParams(location.search);
+    const query = queryParams.get("search");
+    if (query) {
+      setSearchQuery(query);
+    }
+  }, [location.search]);
+
+  // Fetch categories, tags, and authors on component mount
+  useEffect(() => {
+    const fetchData = async () => {
       try {
         const [categoriesData, tagsData] = await Promise.all([
           getCategories(),
@@ -62,13 +87,79 @@ const BlogEditor = () => {
         ]);
         setCategories(categoriesData);
         setTags(tagsData);
+
+        // Fetch authors
+        if (supabase) {
+          const { data: authorsData, error: authorsError } = await supabase
+            .from("authors")
+            .select("*");
+
+          if (authorsError) {
+            console.error("Error fetching authors:", authorsError);
+            throw new Error("Failed to fetch authors");
+          }
+
+          if (authorsData && authorsData.length > 0) {
+            setAuthors(
+              authorsData.map((author) => ({
+                id: author.id,
+                name: author.name,
+                avatar: author.avatar,
+                bio: author.bio || undefined,
+              })),
+            );
+          } else {
+            // If no authors in database, create a default list
+            const defaultAuthors: Author[] = [
+              {
+                id: "current_user",
+                name: "Current User",
+                avatar:
+                  "https://api.dicebear.com/7.x/avataaars/svg?seed=currentuser",
+              },
+              {
+                id: "admin",
+                name: "Admin",
+                avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=admin",
+              },
+              {
+                id: "editor",
+                name: "Editor",
+                avatar:
+                  "https://api.dicebear.com/7.x/avataaars/svg?seed=editor",
+              },
+            ];
+            setAuthors(defaultAuthors);
+          }
+        } else {
+          // Fallback for when Supabase is not available
+          const defaultAuthors: Author[] = [
+            {
+              id: "current_user",
+              name: "Current User",
+              avatar:
+                "https://api.dicebear.com/7.x/avataaars/svg?seed=currentuser",
+            },
+            {
+              id: "admin",
+              name: "Admin",
+              avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=admin",
+            },
+            {
+              id: "editor",
+              name: "Editor",
+              avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=editor",
+            },
+          ];
+          setAuthors(defaultAuthors);
+        }
       } catch (error) {
-        console.error("Error fetching categories and tags:", error);
-        setError("Failed to load categories and tags. Please try again later.");
+        console.error("Error fetching data:", error);
+        setError("Failed to load necessary data. Please try again later.");
       }
     };
 
-    fetchCategoriesAndTags();
+    fetchData();
   }, []);
 
   // Fetch blog post data if editing
@@ -94,6 +185,7 @@ const BlogEditor = () => {
               featuredImage: post.featuredImage,
               status: post.status,
               publishedAt: post.publishedAt,
+              authorId: post.author.id,
             });
           } else {
             setError("Blog post not found");
@@ -119,12 +211,56 @@ const BlogEditor = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImageFile(file);
+
+    // Create a preview URL for the image
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      setImagePreview(result);
+      setFormData((prev) => ({ ...prev, featuredImage: result }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleMarkdownFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setMarkdownFile(file);
+
+    // Read the markdown file content
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      // Normalize line endings to ensure consistent handling across platforms
+      // Convert all types of line endings (CRLF, CR) to LF
+      const normalizedContent = result
+        .replace(/\r\n/g, "\n") // CRLF → LF
+        .replace(/\r/g, "\n"); // CR → LF
+      setFormData((prev) => ({ ...prev, content: normalizedContent }));
+      // Reset editing state when a new file is uploaded
+      setIsEditingUploadedContent(false);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleContentInputMethodChange = (value: "editor" | "upload") => {
+    setContentInputMethod(value);
+    // Reset editing state when switching input methods
+    setIsEditingUploadedContent(false);
+  };
+
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleContentChange = (content: string) => {
-    setFormData((prev) => ({ ...prev, content }));
+  const handleContentChange = (value?: string) => {
+    setFormData((prev) => ({ ...prev, content: value || "" }));
   };
 
   const handleTagChange = (tagId: string, checked: boolean) => {
@@ -144,24 +280,62 @@ const BlogEditor = () => {
     setSuccess(null);
 
     try {
+      // Prepare the content based on the input method
+      let finalContent = formData.content;
+
+      // If using uploaded content and not in editing mode, use the original uploaded content
+      if (
+        contentInputMethod === "upload" &&
+        markdownFile &&
+        !isEditingUploadedContent
+      ) {
+        // Re-read the file to ensure we have the latest content
+        const reader = new FileReader();
+        const fileContent = await new Promise<string>((resolve) => {
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsText(markdownFile);
+        });
+        // Normalize line endings to ensure consistent handling across platforms
+        // Convert all types of line endings (CRLF, CR) to LF
+        finalContent = fileContent
+          .replace(/\r\n/g, "\n") // CRLF → LF
+          .replace(/\r/g, "\n"); // CR → LF
+      }
+
+      // Create the final form data with the prepared content
+      const finalFormData = {
+        ...formData,
+        content: finalContent,
+      };
+
       if (isEditing && id) {
-        await updateBlogPost(id, formData);
+        await updateBlogPost(id, finalFormData);
         setSuccess("Blog post updated successfully!");
       } else {
-        await createBlogPost(formData);
+        await createBlogPost(finalFormData);
         setSuccess("Blog post created successfully!");
       }
     } catch (error) {
       console.error("Error saving blog post:", error);
-      setError("Failed to save blog post. Please try again later.");
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Failed to save blog post. Please try again later.",
+      );
     } finally {
       setIsSaving(false);
     }
   };
 
+  const [showPreview, setShowPreview] = useState(false);
+  const [fullscreenEditor, setFullscreenEditor] = useState(false);
+
   const handlePreview = () => {
-    // Implement preview functionality
-    console.log("Preview:", formData);
+    setShowPreview(!showPreview);
+  };
+
+  const handleFullscreen = () => {
+    setFullscreenEditor(!fullscreenEditor);
   };
 
   if (isLoading) {
@@ -205,7 +379,7 @@ const BlogEditor = () => {
         >
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <div>
+        <div className="flex-1">
           <h1 className="text-3xl font-bold">
             {isEditing ? "Edit Post" : "Create New Post"}
           </h1>
@@ -215,6 +389,12 @@ const BlogEditor = () => {
               : "Create a new blog post for your website"}
           </p>
         </div>
+        {searchQuery && (
+          <div className="flex items-center bg-blue-50 px-3 py-2 rounded-md">
+            <Search className="h-4 w-4 text-blue-500 mr-2" />
+            <span className="text-sm text-blue-700">Search: {searchQuery}</span>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -241,53 +421,37 @@ const BlogEditor = () => {
             <CardTitle>Post Content</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="title">Title</Label>
-              <Input
-                id="title"
-                name="title"
-                value={formData.title}
-                onChange={handleInputChange}
-                placeholder="Enter post title"
-                required
-              />
-            </div>
+            <TextField
+              id="title"
+              name="title"
+              label="Title"
+              value={formData.title}
+              onChange={handleInputChange}
+              placeholder="Enter post title"
+              required
+            />
 
-            <div className="space-y-2">
-              <Label htmlFor="excerpt">Excerpt</Label>
-              <Textarea
-                id="excerpt"
-                name="excerpt"
-                value={formData.excerpt}
-                onChange={handleInputChange}
-                placeholder="Enter a brief summary of your post"
-                rows={3}
-                required
-              />
-            </div>
+            <TextField
+              id="excerpt"
+              name="excerpt"
+              label="Excerpt"
+              value={formData.excerpt}
+              onChange={handleInputChange}
+              placeholder="Enter a brief summary of your post"
+              rows={3}
+              required
+            />
 
-            <div className="space-y-2">
-              <Label htmlFor="content">Content</Label>
-              <div className="min-h-[300px]">
-                <ReactQuill
-                  theme="snow"
-                  value={formData.content}
-                  onChange={handleContentChange}
-                  modules={{
-                    toolbar: [
-                      [{ header: [1, 2, 3, 4, 5, 6, false] }],
-                      ["bold", "italic", "underline", "strike"],
-                      [{ list: "ordered" }, { list: "bullet" }],
-                      ["blockquote", "code-block"],
-                      [{ color: [] }, { background: [] }],
-                      ["link", "image"],
-                      ["clean"],
-                    ],
-                  }}
-                  placeholder="Write your blog post content here..."
-                />
-              </div>
-            </div>
+            <ContentInput
+              contentInputMethod={contentInputMethod}
+              onContentInputMethodChange={handleContentInputMethodChange}
+              content={formData.content}
+              onContentChange={handleContentChange}
+              markdownFile={markdownFile}
+              onMarkdownFileChange={handleMarkdownFileChange}
+              isEditingUploadedContent={isEditingUploadedContent}
+              setIsEditingUploadedContent={setIsEditingUploadedContent}
+            />
           </CardContent>
         </Card>
 
@@ -296,104 +460,73 @@ const BlogEditor = () => {
             <CardTitle>Post Settings</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="featuredImage">Featured Image URL</Label>
-              <Input
-                id="featuredImage"
-                name="featuredImage"
-                value={formData.featuredImage}
-                onChange={handleInputChange}
-                placeholder="Enter image URL"
-              />
-              {formData.featuredImage && (
-                <div className="mt-2 border rounded-md overflow-hidden w-full max-w-xs">
-                  <img
-                    src={formData.featuredImage}
-                    alt="Featured preview"
-                    className="w-full h-auto object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src =
-                        "https://via.placeholder.com/300x200?text=Invalid+Image+URL";
-                    }}
-                  />
-                </div>
-              )}
-            </div>
+            <ImageUpload
+              featuredImage={formData.featuredImage}
+              imagePreview={imagePreview}
+              onInputChange={handleInputChange}
+              onFileChange={handleImageFileChange}
+            />
 
-            <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
-              <Select
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <CategorySelect
                 value={formData.categoryId}
                 onValueChange={(value) =>
                   handleSelectChange("categoryId", value)
                 }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                categories={categories}
+              />
+
+              <AuthorSelect
+                value={formData.authorId}
+                onValueChange={(value) => handleSelectChange("authorId", value)}
+                authors={authors}
+              />
             </div>
 
-            <div className="space-y-2">
-              <Label>Tags</Label>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {tags.map((tag) => (
-                  <div key={tag.id} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`tag-${tag.id}`}
-                      checked={formData.tagIds.includes(tag.id)}
-                      onCheckedChange={(checked) =>
-                        handleTagChange(tag.id, checked as boolean)
-                      }
-                    />
-                    <Label htmlFor={`tag-${tag.id}`} className="cursor-pointer">
-                      {tag.name}
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <TagsCheckboxGroup
+              tags={tags}
+              selectedTagIds={formData.tagIds}
+              onTagChange={handleTagChange}
+            />
 
-            <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select
-                value={formData.status}
-                onValueChange={(value) =>
-                  handleSelectChange(
-                    "status",
-                    value as "draft" | "published" | "scheduled",
-                  )
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="published">Published</SelectItem>
-                  <SelectItem value="scheduled">Scheduled</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <StatusSelect
+              value={formData.status}
+              onValueChange={(value) => handleSelectChange("status", value)}
+            />
           </CardContent>
         </Card>
 
+        {showPreview && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Markdown Preview</CardTitle>
+              {contentInputMethod === "upload" && markdownFile && (
+                <div className="text-sm text-gray-500 mt-1">
+                  Previewing {isEditingUploadedContent ? "edited" : "uploaded"}{" "}
+                  content from: {markdownFile.name}
+                </div>
+              )}
+            </CardHeader>
+            <CardContent className="max-h-[800px] overflow-auto">
+              <div className="prose max-w-none overflow-auto p-4 border rounded-md bg-white">
+                <pre className="whitespace-pre-wrap">{formData.content}</pre>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="flex justify-between items-center">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handlePreview}
-            className="flex items-center gap-2"
-          >
-            <Eye className="h-4 w-4" /> Preview
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handlePreview}
+              className="flex items-center gap-2"
+            >
+              <Eye className="h-4 w-4" />{" "}
+              {showPreview ? "Hide Preview" : "Show Preview"}
+            </Button>
+          </div>
           <div className="space-x-2">
             <Button
               type="submit"

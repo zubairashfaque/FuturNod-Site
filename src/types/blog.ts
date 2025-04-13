@@ -8,6 +8,7 @@ export interface BlogPostFormData {
   featuredImage: string;
   status: "draft" | "published" | "scheduled";
   publishedAt: string | null;
+  authorId: string;
 }
 
 export interface Author {

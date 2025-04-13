@@ -13,6 +13,7 @@ import BlogList from "./components/BlogList";
 
 // Lazy load admin components for better performance
 const BlogAdmin = lazy(() => import("./components/admin/BlogAdmin"));
+const AdminDashboard = lazy(() => import("./components/admin/AdminDashboard"));
 const BlogEditor = lazy(() => import("./components/admin/BlogEditor"));
 const SupabaseSetup = lazy(() => import("./components/admin/SupabaseSetup"));
 const LoginPage = lazy(() => import("./components/auth/LoginPage"));
@@ -67,6 +68,16 @@ function App() {
             <Route path="/admin/login" element={<LoginPage />} />
 
             {/* Protected Admin routes */}
+            <Route
+              path="/admin/AdminDashboard"
+              element={
+                <ProtectedRoute>
+                  <ErrorBoundary>
+                    <AdminDashboard />
+                  </ErrorBoundary>
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/admin/blog"
               element={
