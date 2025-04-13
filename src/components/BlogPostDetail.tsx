@@ -8,10 +8,8 @@ import Footer from "./footer";
 import ContactModal from "./ContactModal";
 import { getBlogPostBySlug } from "../api/blog";
 import { BlogPost } from "../types/blog";
-// Import React Markdown and only the essential plugins
+// Import React Markdown with only essential plugins
 import ReactMarkdown from 'react-markdown';
-import rehypeRaw from 'rehype-raw';
-import remarkGfm from 'remark-gfm';
 // Import markdown styles
 import '../styles/markdown.css';
 
@@ -65,18 +63,8 @@ const BlogPostDetail = (props: BlogPostDetailProps) => {
   // Helper function to determine if content is mostly HTML
   const isHtmlContent = (content: string): boolean => {
     if (!content) return false;
-    // More sophisticated check for HTML content
-    const htmlTagCount = (content.match(/<[^>]+>/g) || []).length;
-    const markdownSyntaxCount = (
-      (content.match(/#{1,6}\s+/g) || []).length + // headings
-      (content.match(/\*\*.*?\*\*/g) || []).length + // bold
-      (content.match(/\*.*?\*/g) || []).length + // italic
-      (content.match(/\[.*?\]\(.*?\)/g) || []).length + // links
-      (content.match(/```[\s\S]*?```/g) || []).length + // code blocks
-      (content.match(/^\s*-\s+/gm) || []).length // list items
-    );
-    
-    return htmlTagCount > markdownSyntaxCount;
+    // Simple check for HTML content
+    return content.includes('</') && content.includes('>');
   };
 
   return (
@@ -144,16 +132,14 @@ const BlogPostDetail = (props: BlogPostDetailProps) => {
 
             <div className="prose prose-lg max-w-none mb-8">
               {/* Conditionally render content based on whether it's HTML or Markdown */}
-              {post.content && isHtmlContent(post.content) ? (
+              {isHtmlContent(post.content) ? (
                 <div dangerouslySetInnerHTML={{ __html: post.content }} />
               ) : (
-                <ReactMarkdown
-                  className="markdown-body" // Use your markdown-body class
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeRaw]}
-                >
-                  {post.content}
-                </ReactMarkdown>
+                <div className="markdown-body">
+                  <ReactMarkdown>
+                    {post.content}
+                  </ReactMarkdown>
+                </div>
               )}
             </div>
 
