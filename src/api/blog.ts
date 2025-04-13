@@ -435,6 +435,9 @@ export const getBlogPostBySlug = async (
 // Replace the createBlogPost function in src/api/blog.ts with this fixed version
 // that properly handles UUID requirements
 
+// Replace the createBlogPost function in src/api/blog.ts with this fixed version
+// that uses a valid existing author_id from your database
+
 export const createBlogPost = async (
   data: BlogPostFormData,
 ): Promise<BlogPost> => {
@@ -610,7 +613,7 @@ export const createBlogPost = async (
           updatedAt: now,
           publishedAt: data.status === "published" ? now : data.publishedAt,
           readTime,
-          category: category,
+          category,
           tags: selectedTags,
           featuredImage,
           title: data.title,
@@ -667,10 +670,22 @@ export const createBlogPost = async (
         throw new Error("Category not found");
       }
 
-      // Create a proper UUID for the author_id
-      const demoAuthorId = "00000000-0000-4000-a000-000000000000";
+      // 2. Get an existing author_id from the authors table
+      const { data: authorData, error: authorError } = await supabase
+        .from("authors")
+        .select("id")
+        .limit(1)
+        .single();
 
-      // 2. Create the post
+      if (authorError || !authorData) {
+        console.error("No author found:", authorError);
+        throw new Error("No author available. Please create an author first.");
+      }
+
+      const authorId = authorData.id;
+      console.log("Using existing author ID:", authorId);
+
+      // 3. Create the post with the valid author_id
       const { data: postData, error: postError } = await supabase
         .from("blog_posts")
         .insert({
@@ -678,7 +693,7 @@ export const createBlogPost = async (
           slug,
           excerpt: data.excerpt,
           content: data.content,
-          author_id: demoAuthorId,
+          author_id: authorId, // Use the existing author ID from the database
           created_at: now,
           updated_at: now,
           published_at: data.status === "published" ? now : data.publishedAt,
@@ -697,7 +712,7 @@ export const createBlogPost = async (
         );
       }
 
-      // 3. Add tags if any
+      // 4. Add tags if any
       if (data.tagIds && data.tagIds.length > 0) {
         const tagInserts = data.tagIds.map((tagId) => ({
           post_id: postData.id,
@@ -714,7 +729,7 @@ export const createBlogPost = async (
         }
       }
 
-      // 4. Return the complete post
+      // 5. Return the complete post
       const createdPost = await getBlogPostById(postData.id);
       if (!createdPost) {
         throw new Error("Post was created but could not be retrieved");
@@ -728,7 +743,6 @@ export const createBlogPost = async (
     );
   }
 };
-
 export const updateBlogPost = async (
   id: string,
   data: Partial<BlogPostFormData>,
