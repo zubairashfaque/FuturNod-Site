@@ -1,16 +1,13 @@
 // src/api/blog.ts
+import { createClient } from '@supabase/supabase-js';
 import { BlogPostFormData, BlogPost, Category, Tag } from "../types/blog";
 
-// Mock database - Replace with actual API calls to your backend
-const STORAGE_KEY = "blog_posts";
-const CATEGORIES_KEY = "blog_categories";
-const TAGS_KEY = "blog_tags";
+// Initialize Supabase client
+// Replace these with your actual Supabase URL and anon key
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
 
-// Generate a unique ID
-const generateId = () => {
-  return Math.random().toString(36).substring(2, 15) + 
-         Math.random().toString(36).substring(2, 15);
-};
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Generate a slug from title
 const generateSlug = (title: string) => {
@@ -20,56 +17,6 @@ const generateSlug = (title: string) => {
     .replace(/\s+/g, '-');
 };
 
-// Load data from localStorage
-const loadFromStorage = <T>(key: string, defaultValue: T): T => {
-  try {
-    const storedData = localStorage.getItem(key);
-    return storedData ? JSON.parse(storedData) : defaultValue;
-  } catch (error) {
-    console.error(`Error loading data from localStorage (${key}):`, error);
-    return defaultValue;
-  }
-};
-
-// Save data to localStorage
-const saveToStorage = <T>(key: string, data: T): void => {
-  try {
-    localStorage.setItem(key, JSON.stringify(data));
-  } catch (error) {
-    console.error(`Error saving data to localStorage (${key}):`, error);
-    throw new Error("Failed to save data");
-  }
-};
-
-// Initialize mock data if not exists
-const initializeMockData = () => {
-  // Initialize categories if they don't exist
-  if (!localStorage.getItem(CATEGORIES_KEY)) {
-    const defaultCategories: Category[] = [
-      { id: "1", name: "Technology", slug: "technology" },
-      { id: "2", name: "Design", slug: "design" },
-      { id: "3", name: "Business", slug: "business" },
-      { id: "4", name: "Development", slug: "development" },
-    ];
-    saveToStorage(CATEGORIES_KEY, defaultCategories);
-  }
-
-  // Initialize tags if they don't exist
-  if (!localStorage.getItem(TAGS_KEY)) {
-    const defaultTags: Tag[] = [
-      { id: "1", name: "Web Development", slug: "web-development" },
-      { id: "2", name: "UX Design", slug: "ux-design" },
-      { id: "3", name: "AI", slug: "ai" },
-      { id: "4", name: "React", slug: "react" },
-      { id: "5", name: "JavaScript", slug: "javascript" },
-    ];
-    saveToStorage(TAGS_KEY, defaultTags);
-  }
-};
-
-// Initialize mock data
-initializeMockData();
-
 // Get all blog posts with filtering options
 export const getBlogPosts = async (options?: {
   status?: string;
@@ -77,29 +24,75 @@ export const getBlogPosts = async (options?: {
   categoryId?: string;
 }): Promise<BlogPost[]> => {
   try {
-    const posts = loadFromStorage<BlogPost[]>(STORAGE_KEY, []);
-    
-    let filteredPosts = [...posts];
+    // Start building the query
+    let query = supabase.from('blog_posts').select(`
+      *,
+      author:author_id(*),
+      category:category_id(*)
+    `);
     
     // Apply filters
     if (options?.status) {
-      filteredPosts = filteredPosts.filter(post => post.status === options.status);
-    }
-    
-    if (options?.search) {
-      const searchLower = options.search.toLowerCase();
-      filteredPosts = filteredPosts.filter(post => 
-        post.title.toLowerCase().includes(searchLower) || 
-        post.excerpt.toLowerCase().includes(searchLower) ||
-        post.content.toLowerCase().includes(searchLower)
-      );
+      query = query.eq('status', options.status);
     }
     
     if (options?.categoryId) {
-      filteredPosts = filteredPosts.filter(post => post.category.id === options.categoryId);
+      query = query.eq('category_id', options.categoryId);
     }
     
-    return filteredPosts;
+    if (options?.search) {
+      query = query.or(`title.ilike.%${options.search}%,excerpt.ilike.%${options.search}%`);
+    }
+    
+    // Execute query
+    const { data, error } = await query;
+    
+    if (error) {
+      throw error;
+    }
+    
+    // Get tags for each post
+    const postsWithTags = await Promise.all(
+      data.map(async (post) => {
+        const { data: tagData, error: tagError } = await supabase
+          .from('blog_post_tags')
+          .select(`
+            tag:tag_id(*)
+          `)
+          .eq('post_id', post.id);
+        
+        if (tagError) {
+          console.error('Error fetching tags for post', post.id, tagError);
+          return {
+            ...post,
+            tags: [],
+          };
+        }
+        
+        return {
+          ...post,
+          tags: tagData.map(t => t.tag),
+        };
+      })
+    );
+    
+    // Format to match the BlogPost interface
+    return postsWithTags.map(post => ({
+      id: post.id,
+      title: post.title,
+      slug: post.slug,
+      excerpt: post.excerpt,
+      content: post.content,
+      category: post.category,
+      tags: post.tags || [],
+      author: post.author,
+      createdAt: post.created_at,
+      updatedAt: post.updated_at,
+      publishedAt: post.published_at,
+      status: post.status,
+      featuredImage: post.featured_image,
+      readTime: post.read_time,
+    }));
   } catch (error) {
     console.error("Error getting blog posts:", error);
     throw new Error("Failed to get blog posts");
@@ -109,8 +102,53 @@ export const getBlogPosts = async (options?: {
 // Get a blog post by ID
 export const getBlogPostById = async (id: string): Promise<BlogPost | null> => {
   try {
-    const posts = loadFromStorage<BlogPost[]>(STORAGE_KEY, []);
-    return posts.find(post => post.id === id) || null;
+    const { data, error } = await supabase
+      .from('blog_posts')
+      .select(`
+        *,
+        author:author_id(*),
+        category:category_id(*)
+      `)
+      .eq('id', id)
+      .single();
+    
+    if (error) {
+      throw error;
+    }
+    
+    if (!data) {
+      return null;
+    }
+    
+    // Get tags for the post
+    const { data: tagData, error: tagError } = await supabase
+      .from('blog_post_tags')
+      .select(`
+        tag:tag_id(*)
+      `)
+      .eq('post_id', id);
+    
+    if (tagError) {
+      console.error('Error fetching tags for post', id, tagError);
+      throw tagError;
+    }
+    
+    return {
+      id: data.id,
+      title: data.title,
+      slug: data.slug,
+      excerpt: data.excerpt,
+      content: data.content,
+      category: data.category,
+      tags: tagData.map(t => t.tag),
+      author: data.author,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+      publishedAt: data.published_at,
+      status: data.status,
+      featuredImage: data.featured_image,
+      readTime: data.read_time,
+    };
   } catch (error) {
     console.error("Error getting blog post by ID:", error);
     throw new Error("Failed to get blog post");
@@ -120,8 +158,53 @@ export const getBlogPostById = async (id: string): Promise<BlogPost | null> => {
 // Get a blog post by slug
 export const getBlogPostBySlug = async (slug: string): Promise<BlogPost | null> => {
   try {
-    const posts = loadFromStorage<BlogPost[]>(STORAGE_KEY, []);
-    return posts.find(post => post.slug === slug) || null;
+    const { data, error } = await supabase
+      .from('blog_posts')
+      .select(`
+        *,
+        author:author_id(*),
+        category:category_id(*)
+      `)
+      .eq('slug', slug)
+      .single();
+    
+    if (error) {
+      throw error;
+    }
+    
+    if (!data) {
+      return null;
+    }
+    
+    // Get tags for the post
+    const { data: tagData, error: tagError } = await supabase
+      .from('blog_post_tags')
+      .select(`
+        tag:tag_id(*)
+      `)
+      .eq('post_id', data.id);
+    
+    if (tagError) {
+      console.error('Error fetching tags for post', data.id, tagError);
+      throw tagError;
+    }
+    
+    return {
+      id: data.id,
+      title: data.title,
+      slug: data.slug,
+      excerpt: data.excerpt,
+      content: data.content,
+      category: data.category,
+      tags: tagData.map(t => t.tag),
+      author: data.author,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+      publishedAt: data.published_at,
+      status: data.status,
+      featuredImage: data.featured_image,
+      readTime: data.read_time,
+    };
   } catch (error) {
     console.error("Error getting blog post by slug:", error);
     throw new Error("Failed to get blog post");
@@ -131,158 +214,198 @@ export const getBlogPostBySlug = async (slug: string): Promise<BlogPost | null> 
 // Create a new blog post
 export const createBlogPost = async (formData: BlogPostFormData): Promise<BlogPost> => {
   try {
-    // Validate required fields
-    if (!formData.title.trim()) {
-      throw new Error("Title is required");
-    }
-    if (!formData.excerpt.trim()) {
-      throw new Error("Excerpt is required");
-    }
-    if (!formData.content.trim()) {
-      throw new Error("Content is required");
-    }
-    if (!formData.categoryId) {
-      throw new Error("Category is required");
+    // Start a transaction
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    
+    if (userError) {
+      throw new Error("User not authenticated");
     }
     
-    // Get categories and tags
-    const categories = loadFromStorage<Category[]>(CATEGORIES_KEY, []);
-    const tags = loadFromStorage<Tag[]>(TAGS_KEY, []);
+    const userId = userData.user.id;
     
-    // Find the selected category
-    const category = categories.find(c => c.id === formData.categoryId);
-    if (!category) {
-      throw new Error("Selected category not found");
-    }
-    
-    // Find the selected tags
-    const selectedTags = tags.filter(tag => formData.tagIds.includes(tag.id));
-    
-    // Create the new post
-    const now = new Date().toISOString();
+    // Generate a slug from the title
     const slug = generateSlug(formData.title);
     
-    // Set default values for missing fields
-    const defaultAuthor = {
-      id: "1",
-      name: "Admin User",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=admin",
-      bio: "Website Administrator"
-    };
+    // Create the blog post
+    const now = new Date().toISOString();
+    const { data: post, error: postError } = await supabase
+      .from('blog_posts')
+      .insert({
+        title: formData.title,
+        slug: slug,
+        excerpt: formData.excerpt,
+        content: formData.content,
+        author_id: userId,
+        category_id: formData.categoryId,
+        featured_image: formData.featuredImage,
+        status: formData.status,
+        published_at: formData.status === 'published' ? now : null,
+        created_at: now,
+        updated_at: now,
+        read_time: Math.max(1, Math.ceil(formData.content.length / 2000)), // Rough estimate
+      })
+      .select()
+      .single();
     
-    // Ensure we have a featured image
-    const featuredImage = formData.featuredImage || 
-      "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=800&q=80";
+    if (postError) {
+      console.error("Error creating blog post:", postError);
+      throw new Error(postError.message);
+    }
     
-    const newPost: BlogPost = {
-      id: generateId(),
-      title: formData.title,
-      slug,
-      excerpt: formData.excerpt,
-      content: formData.content,
-      category,
-      tags: selectedTags,
-      author: defaultAuthor,
-      createdAt: now,
-      updatedAt: now,
-      publishedAt: formData.status === "published" ? now : null,
-      status: formData.status,
-      featuredImage,
-      readTime: Math.max(1, Math.ceil(formData.content.length / 2000)), // Rough estimate
-    };
+    // Add tags to the post if there are any
+    if (formData.tagIds && formData.tagIds.length > 0) {
+      const tagInserts = formData.tagIds.map(tagId => ({
+        post_id: post.id,
+        tag_id: tagId,
+      }));
+      
+      const { error: tagError } = await supabase
+        .from('blog_post_tags')
+        .insert(tagInserts);
+      
+      if (tagError) {
+        console.error("Error adding tags to post:", tagError);
+        // Continue anyway but log the error
+      }
+    }
     
-    // Save to storage
-    const posts = loadFromStorage<BlogPost[]>(STORAGE_KEY, []);
-    posts.push(newPost);
-    saveToStorage(STORAGE_KEY, posts);
-    
-    return newPost;
+    // Fetch the complete post with relations
+    return await getBlogPostById(post.id) as BlogPost;
   } catch (error) {
     console.error("Error creating blog post:", error);
-    throw error; // Re-throw to propagate the error message
+    throw error instanceof Error 
+      ? error 
+      : new Error("Failed to create blog post");
   }
 };
 
 // Update an existing blog post
 export const updateBlogPost = async (id: string, formData: BlogPostFormData): Promise<BlogPost> => {
   try {
-    const posts = loadFromStorage<BlogPost[]>(STORAGE_KEY, []);
-    const postIndex = posts.findIndex(post => post.id === id);
+    // Get the current post
+    const { data: currentPost, error: getError } = await supabase
+      .from('blog_posts')
+      .select('*')
+      .eq('id', id)
+      .single();
     
-    if (postIndex === -1) {
+    if (getError) {
       throw new Error("Blog post not found");
     }
     
-    // Validate required fields
-    if (!formData.title.trim()) {
-      throw new Error("Title is required");
+    // Generate a new slug if the title has changed
+    const slug = currentPost.title !== formData.title
+      ? generateSlug(formData.title)
+      : currentPost.slug;
+    
+    // Update the post
+    const now = new Date().toISOString();
+    const { error: updateError } = await supabase
+      .from('blog_posts')
+      .update({
+        title: formData.title,
+        slug: slug,
+        excerpt: formData.excerpt,
+        content: formData.content,
+        category_id: formData.categoryId,
+        featured_image: formData.featuredImage,
+        status: formData.status,
+        published_at: formData.status === 'published' 
+          ? (currentPost.published_at || now) 
+          : currentPost.published_at,
+        updated_at: now,
+        read_time: Math.max(1, Math.ceil(formData.content.length / 2000)),
+      })
+      .eq('id', id);
+    
+    if (updateError) {
+      throw new Error(updateError.message);
     }
-    if (!formData.excerpt.trim()) {
-      throw new Error("Excerpt is required");
-    }
-    if (!formData.content.trim()) {
-      throw new Error("Content is required");
-    }
-    if (!formData.categoryId) {
-      throw new Error("Category is required");
-    }
     
-    // Get categories and tags
-    const categories = loadFromStorage<Category[]>(CATEGORIES_KEY, []);
-    const tags = loadFromStorage<Tag[]>(TAGS_KEY, []);
+    // Remove all current tags
+    const { error: deleteTagsError } = await supabase
+      .from('blog_post_tags')
+      .delete()
+      .eq('post_id', id);
     
-    // Find the selected category
-    const category = categories.find(c => c.id === formData.categoryId);
-    if (!category) {
-      throw new Error("Selected category not found");
+    if (deleteTagsError) {
+      console.error("Error removing tags from post:", deleteTagsError);
+      // Continue anyway but log the error
     }
     
-    // Find the selected tags
-    const selectedTags = tags.filter(tag => formData.tagIds.includes(tag.id));
+    // Add new tags
+    if (formData.tagIds && formData.tagIds.length > 0) {
+      const tagInserts = formData.tagIds.map(tagId => ({
+        post_id: id,
+        tag_id: tagId,
+      }));
+      
+      const { error: tagError } = await supabase
+        .from('blog_post_tags')
+        .insert(tagInserts);
+      
+      if (tagError) {
+        console.error("Error adding tags to post:", tagError);
+        // Continue anyway but log the error
+      }
+    }
     
-    const existingPost = posts[postIndex];
-    const updatedPost: BlogPost = {
-      ...existingPost,
-      title: formData.title,
-      excerpt: formData.excerpt,
-      content: formData.content,
-      category,
-      tags: selectedTags,
-      updatedAt: new Date().toISOString(),
-      publishedAt: formData.status === "published" ? 
-        (existingPost.publishedAt || new Date().toISOString()) : null,
-      status: formData.status,
-      featuredImage: formData.featuredImage || existingPost.featuredImage,
-      readTime: Math.max(1, Math.ceil(formData.content.length / 2000)),
-    };
-    
-    // Update post
-    posts[postIndex] = updatedPost;
-    saveToStorage(STORAGE_KEY, posts);
-    
-    return updatedPost;
+    // Fetch the complete updated post with relations
+    return await getBlogPostById(id) as BlogPost;
   } catch (error) {
     console.error("Error updating blog post:", error);
-    throw error;
+    throw error instanceof Error 
+      ? error 
+      : new Error("Failed to update blog post");
   }
 };
 
 // Delete a blog post
 export const deleteBlogPost = async (id: string): Promise<void> => {
   try {
-    const posts = loadFromStorage<BlogPost[]>(STORAGE_KEY, []);
-    const updatedPosts = posts.filter(post => post.id !== id);
-    saveToStorage(STORAGE_KEY, updatedPosts);
+    // Delete the tags first (due to foreign key constraints)
+    const { error: deleteTagsError } = await supabase
+      .from('blog_post_tags')
+      .delete()
+      .eq('post_id', id);
+    
+    if (deleteTagsError) {
+      throw new Error(deleteTagsError.message);
+    }
+    
+    // Delete the post
+    const { error: deletePostError } = await supabase
+      .from('blog_posts')
+      .delete()
+      .eq('id', id);
+    
+    if (deletePostError) {
+      throw new Error(deletePostError.message);
+    }
   } catch (error) {
     console.error("Error deleting blog post:", error);
-    throw new Error("Failed to delete blog post");
+    throw error instanceof Error 
+      ? error 
+      : new Error("Failed to delete blog post");
   }
 };
 
 // Get all categories
 export const getCategories = async (): Promise<Category[]> => {
   try {
-    return loadFromStorage<Category[]>(CATEGORIES_KEY, []);
+    const { data, error } = await supabase
+      .from('categories')
+      .select('*');
+    
+    if (error) {
+      throw error;
+    }
+    
+    return data.map(category => ({
+      id: category.id,
+      name: category.name,
+      slug: category.slug,
+    }));
   } catch (error) {
     console.error("Error getting categories:", error);
     throw new Error("Failed to get categories");
@@ -292,7 +415,19 @@ export const getCategories = async (): Promise<Category[]> => {
 // Get all tags
 export const getTags = async (): Promise<Tag[]> => {
   try {
-    return loadFromStorage<Tag[]>(TAGS_KEY, []);
+    const { data, error } = await supabase
+      .from('tags')
+      .select('*');
+    
+    if (error) {
+      throw error;
+    }
+    
+    return data.map(tag => ({
+      id: tag.id,
+      name: tag.name,
+      slug: tag.slug,
+    }));
   } catch (error) {
     console.error("Error getting tags:", error);
     throw new Error("Failed to get tags");
