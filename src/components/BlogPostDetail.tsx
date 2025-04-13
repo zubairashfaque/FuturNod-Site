@@ -8,6 +8,14 @@ import Footer from "./footer";
 import ContactModal from "./ContactModal";
 import { getBlogPostBySlug } from "../api/blog";
 import { BlogPost } from "../types/blog";
+// Import React Markdown and plugins
+import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
+import rehypeHighlight from 'rehype-highlight';
+import remarkGfm from 'remark-gfm';
+// You may need to import a CSS file for the code highlighting
+// import 'highlight.js/styles/github.css';
 
 interface BlogPostDetailProps {
   slug?: string;
@@ -54,6 +62,23 @@ const BlogPostDetail = (props: BlogPostDetailProps) => {
       month: "long",
       day: "numeric",
     });
+  };
+
+  // Helper function to determine if content is mostly HTML
+  const isHtmlContent = (content: string): boolean => {
+    if (!content) return false;
+    // More sophisticated check for HTML content
+    const htmlTagCount = (content.match(/<[^>]+>/g) || []).length;
+    const markdownSyntaxCount = (
+      (content.match(/#{1,6}\s+/g) || []).length + // headings
+      (content.match(/\*\*.*?\*\*/g) || []).length + // bold
+      (content.match(/\*.*?\*/g) || []).length + // italic
+      (content.match(/\[.*?\]\(.*?\)/g) || []).length + // links
+      (content.match(/```[\s\S]*?```/g) || []).length + // code blocks
+      (content.match(/^\s*-\s+/gm) || []).length // list items
+    );
+    
+    return htmlTagCount > markdownSyntaxCount;
   };
 
   return (
@@ -120,7 +145,18 @@ const BlogPostDetail = (props: BlogPostDetailProps) => {
             </div>
 
             <div className="prose prose-lg max-w-none mb-8">
-              <div dangerouslySetInnerHTML={{ __html: post.content }} />
+              {/* Conditionally render content based on whether it's HTML or Markdown */}
+              {post.content && isHtmlContent(post.content) ? (
+                <div dangerouslySetInnerHTML={{ __html: post.content }} />
+              ) : (
+                <ReactMarkdown
+                  className="markdown-content"
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeHighlight]}
+                >
+                  {post.content}
+                </ReactMarkdown>
+              )}
             </div>
 
             {post.tags.length > 0 && (
